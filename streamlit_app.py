@@ -90,13 +90,6 @@ except Exception as e:
     MODULE_ERRORS['eks_modernization'] = str(e)
 
 try:
-    from finops_module import render_finops_tab
-    MODULE_STATUS['FinOps'] = True
-except Exception as e:
-    MODULE_STATUS['FinOps'] = False
-    MODULE_ERRORS['finops_module'] = str(e)
-
-try:
     from compliance_module import render_compliance_tab
     MODULE_STATUS['Compliance'] = True
 except Exception as e:
@@ -737,38 +730,6 @@ def render_waf_results_tab():
                 st.download_button("📊 Download JSON", json.dumps(export_data, indent=2, default=str), file_name=f"WAF_Export_{datetime.now().strftime('%Y%m%d')}.json", mime="application/json", use_container_width=True)
 
 # ============================================================================
-# KNOWLEDGE BASE
-# ============================================================================
-
-def render_knowledge_base_tab():
-    """Render knowledge base"""
-    st.markdown('<div style="background: linear-gradient(135deg, #5E35B1 0%, #7E57C2 100%); padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 1.5rem;"><h2 style="color: white; margin: 0;">📚 Knowledge Base</h2></div>', unsafe_allow_html=True)
-    
-    tabs = st.tabs(["📖 WAF Pillars", "🔧 Best Practices", "🔗 Resources"])
-    
-    with tabs[0]:
-        for key, pillar in WAF_PILLARS.items():
-            with st.expander(f"{pillar['icon']} {pillar['name']}"):
-                st.markdown(f"[📖 AWS Docs](https://docs.aws.amazon.com/wellarchitected/latest/framework/{key.replace('_', '-')}.html)")
-    
-    with tabs[1]:
-        practices = {
-            "Identity & Access": ["AWS Organizations", "Least privilege IAM", "Enable MFA", "Use IAM roles"],
-            "Data Protection": ["KMS encryption", "TLS 1.2+", "S3 Block Public Access"],
-            "Monitoring": ["CloudTrail", "CloudWatch", "GuardDuty"],
-            "Cost": ["Reserved Instances", "Right-sizing", "Cost Explorer"]
-        }
-        for cat, items in practices.items():
-            st.markdown(f"**{cat}:** {', '.join(items)}")
-    
-    with tabs[2]:
-        st.markdown("""
-        - [AWS Well-Architected Framework](https://docs.aws.amazon.com/wellarchitected/)
-        - [AWS Architecture Center](https://aws.amazon.com/architecture/)
-        - [AWS Solutions Library](https://aws.amazon.com/solutions/)
-        """)
-
-# ============================================================================
 # MAIN
 # ============================================================================
 
@@ -824,31 +785,25 @@ def main():
             if 'waf_review_module' in MODULE_ERRORS:
                 st.error(f"Error: {MODULE_ERRORS['waf_review_module']}")
     
-    with tabs[5]:  # Architecture Patterns (was tabs[4])
+    with tabs[5]:  # Architecture Patterns
         if MODULE_STATUS.get('Architecture Patterns'):
             render_architecture_patterns_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('architecture_patterns', 'Unknown')}")
     
-    with tabs[5]:  # Architecture Patterns (was tabs[4])
-        if MODULE_STATUS.get('Architecture Patterns'):
-            render_architecture_patterns_tab()
-        else:
-            st.error(f"Module error: {MODULE_ERRORS.get('architecture_patterns', 'Unknown')}")
-    
-    with tabs[6]:  # EKS & Modernization (was tabs[5])
+    with tabs[6]:  # EKS & Modernization
         if MODULE_STATUS.get('EKS & Modernization'):
             render_eks_modernization_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('eks_modernization', 'Unknown')}")
     
-    with tabs[7]:  # Compliance (was tabs[7])
+    with tabs[7]:  # Compliance
         if MODULE_STATUS.get('Compliance'):
             render_compliance_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('compliance_module', 'Unknown')}")
     
-    with tabs[8]:  # Migration & DR (was tabs[8])
+    with tabs[8]:  # Migration & DR
         if MODULE_STATUS.get('Migration & DR'):
             render_migration_dr_tab()
         else:
