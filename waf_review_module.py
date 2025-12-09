@@ -1954,6 +1954,9 @@ def render_assessment_tab(assessment: Dict):
     if pillar_filter != "All":
         filtered_questions = [q for q in questions if q.pillar.value == pillar_filter]
     
+    # Get auto-detected questions (must be defined before use)
+    auto_detected = assessment.get('auto_detected', {})
+    
     # Calculate statistics
     auto_detected_count = sum(1 for q in filtered_questions if q.id in auto_detected)
     
@@ -1965,8 +1968,6 @@ def render_assessment_tab(assessment: Dict):
     st.info(info_msg)
     
     # Render questions
-    auto_detected = assessment.get('auto_detected', {})
-    
     for idx, question in enumerate(filtered_questions[:show_count]):
         # Check if this question was auto-detected
         is_auto_detected = question.id in auto_detected
