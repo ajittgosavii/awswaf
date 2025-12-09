@@ -429,12 +429,13 @@ firebase_manager = FirebaseAuthManager()
 def render_login_page():
     """Render login page"""
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #FF9900 0%, #232F3E 100%); 
+    <div style="background: #FFFFFF; 
                 padding: 3rem; border-radius: 12px; margin-bottom: 2rem; text-align: center;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
-        <h1 style="color: #FFFFFF; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">🔐 AWS Well-Architected Advisor</h1>
-        <p style="color: #FFFFFF; opacity: 0.95; margin: 0.5rem 0 0 0; font-size: 1.2rem; text-shadow: 0 1px 2px rgba(0,0,0,0.2);">
-            Enterprise Edition - Secure Login
+                border: 3px solid #FF9900;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+        <h1 style="color: #232F3E; margin: 0; font-size: 2.2rem; font-weight: 700;">🔐 AWS Well-Architected Advisor</h1>
+        <p style="color: #FF9900; margin: 0.5rem 0 0 0; font-size: 1.2rem; font-weight: 600;">
+            Enterprise Edition v2.2 - Secure Login
         </p>
     </div>
     """, unsafe_allow_html=True)
