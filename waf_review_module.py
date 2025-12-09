@@ -402,7 +402,7 @@ def get_complete_waf_questions() -> List[Question]:
                     "pci_dss": ["12.1"],
                     "hipaa": ["164.308"]
                 },
-                auto_detectable=(i % 3 == 0),  # Every 3rd question is auto-detectable
+                automated_check=f"aws_config_{category_base.lower().replace(' ', '_')}" if (i % 3 == 0) else None,
                 maturity_level=2 if i > count//2 else 1,
                 tags=[category_base.lower().replace(" ", "-"), prefix.lower().split("-")[0]]
             ))
