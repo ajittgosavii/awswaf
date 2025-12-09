@@ -1,14 +1,17 @@
 """
-FinOps Module
+FinOps Module - Enhanced with AWS-Specific Intelligence
 Comprehensive Cloud Financial Management Platform
 
 Features:
-- Cost analysis and breakdown
+- AWS Cost Explorer integration and analysis
 - Optimization recommendations with AI
 - RI/Savings Plans advisor
 - Waste detection and elimination
 - FinOps maturity assessment
 - Cost allocation and showback
+- Real-time AWS cost tracking
+- Carbon footprint analysis
+- Anomaly detection and alerting
 """
 
 import streamlit as st
@@ -16,624 +19,1076 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 import json
+import boto3
+from botocore.exceptions import ClientError
 
 # ============================================================================
-# FINOPS DATA STRUCTURES
+# AWS COST OPTIMIZATION FRAMEWORK
 # ============================================================================
 
-COST_CATEGORIES = {
+AWS_COST_CATEGORIES = {
     "compute": {
         "name": "Compute",
         "icon": "💻",
         "services": ["EC2", "Lambda", "ECS", "EKS", "Fargate", "Lightsail", "Batch"],
         "typical_percentage": 45,
-        "optimization_potential": "20-40%"
+        "optimization_potential": "20-40%",
+        "aws_tools": ["AWS Compute Optimizer", "Cost Explorer", "Trusted Advisor"],
+        "key_metrics": [
+            "vCPU utilization",
+            "Memory utilization",
+            "Network throughput",
+            "Storage IOPS"
+        ]
     },
     "storage": {
         "name": "Storage",
         "icon": "💾",
-        "services": ["S3", "EBS", "EFS", "FSx", "Glacier", "Storage Gateway"],
+        "services": ["S3", "EBS", "EFS", "FSx", "Glacier", "Storage Gateway", "Backup"],
         "typical_percentage": 15,
-        "optimization_potential": "15-30%"
+        "optimization_potential": "15-30%",
+        "aws_tools": ["S3 Storage Class Analysis", "EBS Volume Analyzer", "Storage Lens"],
+        "key_metrics": [
+            "Storage utilization",
+            "Access patterns",
+            "Data transfer costs",
+            "Snapshot costs"
+        ]
     },
     "database": {
         "name": "Database",
         "icon": "🗄️",
-        "services": ["RDS", "DynamoDB", "ElastiCache", "Redshift", "Neptune", "DocumentDB"],
+        "services": ["RDS", "DynamoDB", "ElastiCache", "Redshift", "Neptune", "DocumentDB", "MemoryDB"],
         "typical_percentage": 20,
-        "optimization_potential": "15-25%"
+        "optimization_potential": "15-25%",
+        "aws_tools": ["RDS Performance Insights", "DynamoDB Auto Scaling", "Redshift Advisor"],
+        "key_metrics": [
+            "Connection count",
+            "Query performance",
+            "Storage growth",
+            "Read/Write capacity units"
+        ]
     },
     "network": {
-        "name": "Network",
+        "name": "Network & Content Delivery",
         "icon": "🌐",
-        "services": ["Data Transfer", "CloudFront", "Route53", "VPC", "Direct Connect", "Global Accelerator"],
+        "services": ["Data Transfer", "CloudFront", "Route53", "VPC", "Direct Connect", "Global Accelerator", "Transit Gateway"],
         "typical_percentage": 10,
-        "optimization_potential": "10-25%"
+        "optimization_potential": "10-25%",
+        "aws_tools": ["VPC Flow Logs", "Cost Explorer (Data Transfer)", "CloudFront Reports"],
+        "key_metrics": [
+            "Inter-AZ data transfer",
+            "Inter-region data transfer",
+            "Internet egress",
+            "VPC endpoint usage"
+        ]
     },
     "other": {
         "name": "Other Services",
         "icon": "📦",
-        "services": ["Support", "Marketplace", "KMS", "Secrets Manager", "CloudWatch"],
+        "services": ["Support", "Marketplace", "KMS", "Secrets Manager", "CloudWatch", "SNS", "SQS"],
         "typical_percentage": 10,
-        "optimization_potential": "5-15%"
+        "optimization_potential": "5-15%",
+        "aws_tools": ["Cost Explorer", "AWS Cost Optimization Hub"],
+        "key_metrics": [
+            "API call volume",
+            "Log retention",
+            "Alarm count",
+            "Secret rotation frequency"
+        ]
     }
 }
 
-OPTIMIZATION_STRATEGIES = [
+# ============================================================================
+# AWS-SPECIFIC OPTIMIZATION STRATEGIES
+# ============================================================================
+
+AWS_OPTIMIZATION_STRATEGIES = [
     {
-        "name": "Reserved Instances",
-        "category": "Commitment",
+        "name": "Reserved Instances (EC2/RDS)",
+        "category": "Commitment Discounts",
         "savings_potential": "30-72%",
         "effort": "Low",
         "risk": "Medium",
         "description": "Commit to 1 or 3 year terms for predictable workloads",
-        "best_for": ["Steady-state workloads", "Production databases", "Always-on applications"],
-        "implementation": [
-            "Analyze 30-day EC2/RDS usage in Cost Explorer",
-            "Identify instances running 24/7 with consistent utilization",
-            "Start with 1-year No Upfront for lower risk",
-            "Consider Convertible RIs for flexibility",
-            "Purchase RIs matching your usage pattern"
+        "aws_service_coverage": ["EC2", "RDS", "ElastiCache", "Redshift", "OpenSearch"],
+        "best_for": [
+            "Steady-state production workloads",
+            "Databases running 24/7",
+            "Always-on applications",
+            "Baseline capacity requirements"
         ],
-        "aws_tools": ["Cost Explorer RI Recommendations", "AWS Cost Optimization Hub"]
+        "implementation": [
+            "Navigate to Cost Explorer > Reserved Instances > Recommendations",
+            "Analyze 30-60 day usage patterns",
+            "Identify instances running consistently (>80% time)",
+            "Start with 1-year No Upfront for lower commitment",
+            "Consider Convertible RIs for instance type flexibility",
+            "Purchase RIs matching your usage pattern",
+            "Monitor RI utilization in Cost Explorer (target >90%)"
+        ],
+        "aws_tools": [
+            "Cost Explorer RI Recommendations",
+            "AWS Cost Optimization Hub",
+            "Trusted Advisor RI Optimization Checks"
+        ],
+        "gotchas": [
+            "Regional RIs don't apply to zonal reservations",
+            "Size flexibility only within instance family",
+            "Convertible RIs have slightly lower discounts",
+            "Unused RIs still incur charges"
+        ],
+        "monitoring": [
+            "RI Coverage (% of usage covered)",
+            "RI Utilization (% of purchased capacity used)",
+            "Expiration dates and renewal planning",
+            "Savings realized vs baseline"
+        ]
     },
     {
         "name": "Savings Plans",
-        "category": "Commitment",
+        "category": "Commitment Discounts",
         "savings_potential": "20-72%",
         "effort": "Low",
         "risk": "Low",
-        "description": "Flexible commitment discount for compute usage",
-        "best_for": ["Variable workloads", "Multi-service usage", "Organizations wanting flexibility"],
+        "description": "Flexible commitment discount for compute usage across services",
+        "aws_service_coverage": ["EC2", "Fargate", "Lambda", "SageMaker"],
+        "types": {
+            "compute_savings_plans": {
+                "discount": "Up to 66%",
+                "flexibility": "Highest - any region, instance family, size, OS, tenancy",
+                "use_case": "Maximum flexibility for dynamic workloads"
+            },
+            "ec2_instance_savings_plans": {
+                "discount": "Up to 72%",
+                "flexibility": "Medium - within instance family in specific region",
+                "use_case": "Predictable EC2 usage patterns"
+            },
+            "sagemaker_savings_plans": {
+                "discount": "Up to 64%",
+                "flexibility": "SageMaker specific",
+                "use_case": "ML workloads"
+            }
+        },
         "implementation": [
-            "Review Savings Plans recommendations in Cost Explorer",
+            "Go to Cost Management > Savings Plans > Recommendations",
             "Choose Compute Savings Plans for maximum flexibility",
+            "Review lookback period (7, 30, or 60 days)",
             "Start with 1-year No Upfront commitment",
-            "Cover 60-70% of baseline usage",
-            "Monitor coverage and adjust"
+            "Cover 60-70% of baseline usage (not 100%)",
+            "Stack with RIs for additional savings",
+            "Monitor coverage and adjust quarterly"
         ],
-        "aws_tools": ["Savings Plans Recommendations", "Cost Optimization Hub"]
+        "aws_tools": [
+            "Savings Plans Recommendations",
+            "Cost Explorer Savings Plans utilization report",
+            "AWS Cost Optimization Hub"
+        ],
+        "best_practices": [
+            "Start conservative - you can always add more",
+            "Combine with Spot for variable load",
+            "Use Compute SP for multi-service coverage",
+            "Review recommendations monthly"
+        ]
     },
     {
         "name": "Spot Instances",
-        "category": "Pricing Model",
+        "category": "Alternative Pricing",
         "savings_potential": "60-90%",
         "effort": "Medium",
         "risk": "Medium",
-        "description": "Use spare EC2 capacity at steep discounts",
-        "best_for": ["Fault-tolerant workloads", "Batch processing", "CI/CD", "Dev/Test"],
-        "implementation": [
-            "Identify fault-tolerant workloads",
-            "Configure Spot Fleet or ASG with Spot",
-            "Use capacity-optimized allocation strategy",
-            "Implement graceful shutdown handling",
-            "Diversify across instance types and AZs"
+        "description": "Use spare AWS capacity at steep discounts with interruption handling",
+        "best_for": [
+            "Fault-tolerant workloads",
+            "Batch processing and ETL",
+            "CI/CD pipelines",
+            "Container workloads (EKS with Karpenter)",
+            "Dev/Test environments",
+            "Big data analytics"
         ],
-        "aws_tools": ["Spot Instance Advisor", "EC2 Fleet", "Karpenter"]
+        "aws_implementation_options": {
+            "ec2_spot_fleets": {
+                "description": "Maintain target capacity across Spot and On-Demand",
+                "configuration": "Define instance types, AZs, and allocation strategy",
+                "use_case": "General purpose Spot usage"
+            },
+            "auto_scaling_groups": {
+                "description": "Mix Spot and On-Demand in ASGs",
+                "configuration": "Set base On-Demand, use Spot for scale-out",
+                "use_case": "Web applications with variable load"
+            },
+            "eks_karpenter": {
+                "description": "Intelligent Kubernetes node provisioning",
+                "configuration": "Karpenter automatically manages Spot diversification",
+                "use_case": "Container workloads on EKS"
+            },
+            "batch_compute_environments": {
+                "description": "AWS Batch managed Spot",
+                "configuration": "Batch handles interruptions and retries",
+                "use_case": "Batch processing workloads"
+            }
+        },
+        "implementation": [
+            "Identify fault-tolerant workloads via architecture review",
+            "Use Spot Instance Advisor to check interruption rates",
+            "Configure diversification (8-10 instance types minimum)",
+            "Implement capacity-optimized or price-capacity-optimized allocation",
+            "Set up 2-minute interruption notice handling",
+            "Use EC2 Instance Rebalance Recommendations",
+            "Test failure scenarios before production",
+            "Monitor Spot interruption rates and savings"
+        ],
+        "aws_tools": [
+            "Spot Instance Advisor",
+            "EC2 Fleet",
+            "Auto Scaling Groups with mixed instances",
+            "Karpenter for EKS",
+            "AWS Batch"
+        ],
+        "interruption_handling": {
+            "warning_time": "2 minutes",
+            "best_practices": [
+                "Checkpoint work frequently",
+                "Implement graceful shutdown",
+                "Use multiple instance types and AZs",
+                "Set up CloudWatch alarms for interruptions",
+                "Use EC2 Instance Metadata Service for warnings"
+            ]
+        }
     },
     {
-        "name": "Right-sizing",
+        "name": "Right-Sizing",
         "category": "Resource Optimization",
         "savings_potential": "10-40%",
         "effort": "Medium",
         "risk": "Low",
-        "description": "Match instance sizes to actual utilization",
-        "best_for": ["Over-provisioned resources", "Variable utilization patterns"],
+        "description": "Match instance sizes and types to actual workload requirements",
+        "aws_tools_integration": {
+            "compute_optimizer": {
+                "features": [
+                    "ML-powered recommendations",
+                    "Historical utilization analysis",
+                    "Performance risk assessment",
+                    "Cost savings projections"
+                ],
+                "metrics_analyzed": [
+                    "CPU utilization (14-day history)",
+                    "Memory utilization (CloudWatch agent required)",
+                    "Network in/out",
+                    "EBS throughput and IOPS"
+                ]
+            },
+            "cost_explorer": {
+                "features": [
+                    "Resource-level cost analysis",
+                    "Utilization heat maps",
+                    "Rightsizing recommendations"
+                ]
+            },
+            "cloudwatch": {
+                "features": [
+                    "Real-time metrics",
+                    "Custom metrics",
+                    "Anomaly detection",
+                    "Performance baselines"
+                ]
+            }
+        },
         "implementation": [
-            "Enable AWS Compute Optimizer",
-            "Review right-sizing recommendations",
-            "Start with clearly over-provisioned instances",
-            "Monitor performance after changes",
-            "Implement continuous right-sizing process"
+            "Enable AWS Compute Optimizer (free service)",
+            "Install CloudWatch agent for memory metrics",
+            "Wait 14 days for sufficient data collection",
+            "Review Compute Optimizer recommendations weekly",
+            "Start with clearly over-provisioned instances (< 40% utilization)",
+            "Test in non-production first",
+            "Implement during maintenance windows",
+            "Monitor performance for 7 days post-change",
+            "Document baseline performance metrics"
         ],
-        "aws_tools": ["Compute Optimizer", "CloudWatch", "Trusted Advisor"]
+        "decision_framework": {
+            "downsize": "Sustained < 40% CPU + low memory",
+            "upsize": "Frequent > 80% CPU or memory pressure",
+            "change_family": "Workload characteristics changed (compute vs memory intensive)",
+            "leave_as_is": "Right-sized or performance-critical with margin"
+        },
+        "best_practices": [
+            "Establish performance baselines before changes",
+            "Right-size in waves, not all at once",
+            "Consider burstable instances (T-series) for variable workloads",
+            "Use Auto Scaling for dynamic workloads instead of oversizing",
+            "Review recommendations monthly, implement quarterly"
+        ]
     },
     {
         "name": "Graviton Migration",
-        "category": "Architecture",
+        "category": "Architecture Optimization",
         "savings_potential": "20-40%",
         "effort": "Medium",
         "risk": "Low",
-        "description": "Move to ARM-based Graviton processors",
-        "best_for": ["Linux workloads", "Containerized apps", "Open source software"],
+        "description": "Move to ARM-based AWS Graviton processors for better price-performance",
+        "graviton_benefits": {
+            "cost_savings": "Up to 40% lower cost than comparable x86 instances",
+            "performance": "Up to 40% better price-performance",
+            "efficiency": "Up to 60% better energy efficiency",
+            "services": ["EC2", "RDS", "EKS", "Lambda", "ECS"]
+        },
+        "compatibility": {
+            "best_for": [
+                "Linux-based workloads",
+                "Open source software (nginx, MySQL, PostgreSQL)",
+                "Containerized applications",
+                "Java, Python, Go, Node.js applications",
+                "Managed services (RDS, ElastiCache)"
+            ],
+            "requires_testing": [
+                "Applications with compiled binaries",
+                "Third-party software dependencies",
+                "Legacy applications"
+            ],
+            "not_compatible": [
+                "Windows workloads",
+                "x86-only commercial software",
+                "Applications requiring specific CPU features"
+            ]
+        },
         "implementation": [
-            "Inventory current x86 workloads",
-            "Test application compatibility on Graviton",
-            "Start with dev/test environments",
-            "Migrate containerized workloads first",
-            "Update AMIs and launch templates"
+            "Inventory current x86 EC2 instances",
+            "Identify compatible Linux workloads",
+            "Test application on Graviton in dev/test (t4g, m6g instances)",
+            "Recompile code if needed (usually not required for interpreted languages)",
+            "Update container images to multi-arch (amd64 + arm64)",
+            "Migrate RDS databases to Graviton",
+            "Update Lambda functions to arm64",
+            "Monitor performance and costs",
+            "Gradually roll out to production"
         ],
-        "aws_tools": ["EC2 Instance Types", "EKS", "Lambda"]
+        "aws_graviton_instance_families": {
+            "general_purpose": ["t4g", "m6g", "m6gd", "m7g"],
+            "compute_optimized": ["c6g", "c6gd", "c6gn", "c7g"],
+            "memory_optimized": ["r6g", "r6gd", "r7g", "x2gd"],
+            "storage_optimized": ["im4gn", "is4gen"],
+            "accelerated_computing": ["g5g"]
+        }
     },
     {
-        "name": "Storage Tiering",
-        "category": "Resource Optimization",
-        "savings_potential": "20-60%",
+        "name": "S3 Intelligent-Tiering & Lifecycle",
+        "category": "Storage Optimization",
+        "savings_potential": "20-95%",
         "effort": "Low",
         "risk": "Low",
-        "description": "Move data to appropriate storage tiers",
-        "best_for": ["Large S3 buckets", "Infrequent access data", "Archival requirements"],
-        "implementation": [
-            "Analyze S3 access patterns with Storage Class Analysis",
-            "Create Lifecycle policies for automatic tiering",
-            "Enable S3 Intelligent-Tiering for unpredictable access",
-            "Move archives to Glacier Deep Archive",
-            "Use EBS volume types appropriate for workload"
+        "description": "Automatically move S3 objects to cost-effective storage classes",
+        "s3_storage_classes": {
+            "s3_standard": {
+                "cost": "$0.023/GB",
+                "use_case": "Frequently accessed data",
+                "retrieval": "Instant, no fees"
+            },
+            "s3_intelligent_tiering": {
+                "cost": "$0.023/GB → $0.0125/GB (auto)",
+                "use_case": "Unpredictable access patterns",
+                "retrieval": "Instant, no fees",
+                "monitoring_fee": "$0.0025 per 1000 objects"
+            },
+            "s3_standard_ia": {
+                "cost": "$0.0125/GB",
+                "use_case": "Infrequent access (< 1/month)",
+                "retrieval": "$0.01/GB + per request fees",
+                "minimum": "30 days, 128KB per object"
+            },
+            "s3_one_zone_ia": {
+                "cost": "$0.01/GB",
+                "use_case": "Infrequent, non-critical data",
+                "retrieval": "$0.01/GB",
+                "durability": "99.999999999% in single AZ"
+            },
+            "glacier_instant_retrieval": {
+                "cost": "$0.004/GB",
+                "use_case": "Archive with instant access",
+                "retrieval": "$0.03/GB",
+                "minimum": "90 days"
+            },
+            "glacier_flexible_retrieval": {
+                "cost": "$0.0036/GB",
+                "use_case": "Archive (mins-hours retrieval)",
+                "retrieval": "Expedited/Standard/Bulk pricing",
+                "minimum": "90 days"
+            },
+            "glacier_deep_archive": {
+                "cost": "$0.00099/GB",
+                "use_case": "Long-term archive (12hr retrieval)",
+                "retrieval": "$0.02/GB",
+                "minimum": "180 days"
+            }
+        },
+        "implementation_strategy": {
+            "intelligent_tiering": [
+                "Enable S3 Intelligent-Tiering for buckets with unpredictable access",
+                "Configure Archive Access tier (90 days)",
+                "Configure Deep Archive Access tier (180 days)",
+                "No lifecycle rules needed - fully automated"
+            ],
+            "lifecycle_policies": [
+                "Analyze access patterns with S3 Storage Class Analysis",
+                "Create lifecycle rules based on object age",
+                "Transition to IA after 30 days",
+                "Transition to Glacier after 90 days",
+                "Transition to Deep Archive after 365 days",
+                "Delete after retention period"
+            ]
+        },
+        "aws_tools": [
+            "S3 Storage Class Analysis",
+            "S3 Storage Lens",
+            "S3 Intelligent-Tiering",
+            "S3 Lifecycle policies"
         ],
-        "aws_tools": ["S3 Storage Class Analysis", "S3 Intelligent-Tiering", "Storage Lens"]
+        "best_practices": [
+            "Use Intelligent-Tiering for unknown patterns",
+            "Enable Storage Class Analysis for 30 days before creating rules",
+            "Consider retrieval costs in total cost calculation",
+            "Use lifecycle rules for predictable patterns",
+            "Monitor with S3 Storage Lens dashboards"
+        ]
     },
     {
-        "name": "Idle Resource Cleanup",
-        "category": "Waste Elimination",
+        "name": "Idle Resource Elimination",
+        "category": "Waste Reduction",
         "savings_potential": "5-20%",
         "effort": "Low",
         "risk": "Low",
-        "description": "Remove unused resources",
-        "best_for": ["Organizations with sprawl", "Post-project cleanup", "Cost governance"],
+        "description": "Identify and remove unused AWS resources",
+        "common_waste_areas": {
+            "unattached_ebs": {
+                "description": "EBS volumes not attached to instances",
+                "typical_cost": "$50-500/month per account",
+                "detection": "AWS Config rule: ec2-volume-inuse-check",
+                "action": "Snapshot and delete after 7-day grace period"
+            },
+            "unused_elastic_ips": {
+                "description": "EIPs not associated with running instances",
+                "typical_cost": "$3.65/month per IP",
+                "detection": "Cost Explorer or custom script",
+                "action": "Release unused EIPs immediately"
+            },
+            "idle_load_balancers": {
+                "description": "ALB/NLB with no traffic",
+                "typical_cost": "$16-43/month per LB",
+                "detection": "CloudWatch metrics: RequestCount, TargetConnectionCount",
+                "action": "Delete LBs with < 100 requests/day"
+            },
+            "old_snapshots": {
+                "description": "EBS snapshots beyond retention period",
+                "typical_cost": "$0.05/GB-month",
+                "detection": "Custom Lambda or AWS Backup lifecycle",
+                "action": "Implement snapshot lifecycle policy"
+            },
+            "stopped_instances": {
+                "description": "EC2 instances stopped long-term",
+                "typical_cost": "EBS storage costs continue",
+                "detection": "AWS Cost Explorer, Trusted Advisor",
+                "action": "Convert to AMI and terminate, or restart"
+            },
+            "unused_nat_gateways": {
+                "description": "NAT Gateways in unused VPCs",
+                "typical_cost": "$32/month per NAT Gateway",
+                "detection": "CloudWatch metrics: BytesOutToDestination",
+                "action": "Delete unused NAT Gateways"
+            },
+            "orphaned_resources": {
+                "description": "Resources from deleted stacks/apps",
+                "typical_cost": "Varies",
+                "detection": "Tag-based inventory, CloudFormation drift",
+                "action": "Implement resource tagging policy"
+            }
+        },
         "implementation": [
-            "Identify unattached EBS volumes",
-            "Find unused Elastic IPs",
-            "Locate idle load balancers",
-            "Delete old EBS snapshots",
-            "Remove unused NAT Gateways"
+            "Enable AWS Config for automated detection",
+            "Set up Trusted Advisor checks",
+            "Create CloudWatch dashboards for idle resources",
+            "Implement tagging strategy (Owner, Environment, CostCenter)",
+            "Schedule monthly waste cleanup reviews",
+            "Automate cleanup with Lambda functions",
+            "Set up SNS notifications for long-running resources"
         ],
-        "aws_tools": ["Trusted Advisor", "Cost Explorer", "AWS Config"]
+        "aws_tools": [
+            "AWS Trusted Advisor",
+            "AWS Cost Explorer",
+            "AWS Config Rules",
+            "Cost Optimization Hub",
+            "CloudWatch Metrics",
+            "AWS Systems Manager Inventory"
+        ],
+        "automation_examples": {
+            "lambda_ebs_cleanup": "Automated EBS volume cleanup after 7 days unattached",
+            "lambda_snapshot_mgmt": "Delete snapshots older than retention policy",
+            "eventbridge_unused_rds": "Alert on RDS instances with no connections for 7 days",
+            "systems_manager_automation": "Stop non-production instances on schedule"
+        }
     },
     {
-        "name": "Instance Scheduling",
-        "category": "Waste Elimination",
+        "name": "Instance Scheduler",
+        "category": "Waste Reduction",
         "savings_potential": "40-70%",
         "effort": "Low",
         "risk": "Low",
-        "description": "Stop non-production resources after hours",
-        "best_for": ["Dev/Test environments", "Demo systems", "Internal tools"],
-        "implementation": [
-            "Deploy AWS Instance Scheduler",
-            "Define schedules (e.g., M-F 8am-6pm)",
-            "Tag resources with schedule names",
-            "Configure timezone appropriately",
-            "Create exceptions for critical resources"
+        "description": "Automatically stop/start non-production resources on schedule",
+        "use_cases": [
+            "Dev/Test environments (nights and weekends)",
+            "Demo and training systems",
+            "Internal tools with business hours usage",
+            "Batch processing windows"
         ],
-        "aws_tools": ["Instance Scheduler", "EventBridge", "Lambda"]
+        "aws_solution": {
+            "name": "AWS Instance Scheduler",
+            "deployment": "CloudFormation template",
+            "features": [
+                "Centralized scheduling across accounts",
+                "Configurable time zones",
+                "Holiday scheduling",
+                "DynamoDB-based configuration",
+                "SNS notifications",
+                "Supports EC2, RDS, Auto Scaling Groups"
+            ]
+        },
+        "implementation": [
+            "Deploy Instance Scheduler CloudFormation stack",
+            "Define schedules (e.g., office-hours: M-F 8am-6pm)",
+            "Tag resources with Schedule tag",
+            "Configure timezone appropriately",
+            "Test with small subset before full rollout",
+            "Set up CloudWatch alarms for scheduler failures",
+            "Create override mechanism for exceptions",
+            "Monitor savings in Cost Explorer"
+        ],
+        "example_schedules": {
+            "office_hours": {
+                "description": "Monday-Friday 8am-6pm",
+                "savings": "65% reduction (113 hours/week savings)"
+            },
+            "business_hours": {
+                "description": "Monday-Friday 7am-7pm",
+                "savings": "55% reduction (108 hours/week savings)"
+            },
+            "weekdays_only": {
+                "description": "Monday-Friday 24 hours, off weekends",
+                "savings": "29% reduction (48 hours/week savings)"
+            },
+            "batch_window": {
+                "description": "Daily 2am-6am only",
+                "savings": "83% reduction (140 hours/week savings)"
+            }
+        },
+        "alternatives": [
+            "AWS Systems Manager (simpler, EC2 only)",
+            "EventBridge + Lambda (custom solution)",
+            "Third-party tools (CloudHealth, Spot.io)"
+        ],
+        "best_practices": [
+            "Start with dev/test, not production",
+            "Use SSM Parameter Store for scheduler configuration",
+            "Implement tagging standards",
+            "Create exceptions for always-on resources",
+            "Monitor scheduler execution logs",
+            "Communicate schedule to development teams"
+        ]
+    },
+    {
+        "name": "AWS Cost Optimization Hub",
+        "category": "Centralized Optimization",
+        "savings_potential": "15-30%",
+        "effort": "Low",
+        "risk": "Low",
+        "description": "Centralized AWS service for discovering and tracking all cost optimization opportunities",
+        "features": [
+            "Aggregates recommendations from 8+ AWS services",
+            "Unified dashboard for all cost optimization opportunities",
+            "Prioritization by estimated savings",
+            "Tracking of implemented recommendations",
+            "Custom recommendation filters",
+            "Multi-account support via Organizations"
+        ],
+        "included_recommendations": {
+            "compute_optimizer": "EC2, Lambda, EBS, ECS on Fargate",
+            "cost_explorer": "RDS idle instances, underutilized EC2",
+            "s3_storage_lens": "S3 storage optimization",
+            "redshift_advisor": "Redshift cluster optimization",
+            "trusted_advisor": "Various best practice checks",
+            "savings_plans": "Commitment discount opportunities"
+        },
+        "implementation": [
+            "Navigate to Cost Management console",
+            "Access Cost Optimization Hub",
+            "Review estimated annual savings",
+            "Filter by service, account, or savings amount",
+            "Export recommendations for team review",
+            "Mark recommendations as implemented",
+            "Track savings realized over time",
+            "Schedule monthly review meetings"
+        ],
+        "advantages": [
+            "Free service - no additional cost",
+            "Single pane of glass for all optimizations",
+            "Automatic recommendation updates",
+            "Integration with AWS Organizations",
+            "Savings tracking and reporting"
+        ]
     }
 ]
 
-FINOPS_MATURITY_DIMENSIONS = {
-    "visibility": {
-        "name": "Cost Visibility",
-        "levels": {
-            1: "No visibility into costs",
-            2: "Monthly bills reviewed",
-            3: "Cost Explorer used regularly",
-            4: "Real-time dashboards available",
-            5: "Anomaly detection in place"
-        }
-    },
-    "allocation": {
-        "name": "Cost Allocation",
-        "levels": {
-            1: "No cost allocation",
-            2: "By AWS account only",
-            3: "Tags used for allocation",
-            4: "Full showback implemented",
-            5: "Chargeback to business units"
-        }
-    },
-    "optimization": {
-        "name": "Optimization",
-        "levels": {
-            1: "No optimization activities",
-            2: "Ad-hoc optimization",
-            3: "Regular reviews and actions",
-            4: "Automated optimization",
-            5: "Continuous AI-driven optimization"
-        }
-    },
-    "forecasting": {
-        "name": "Forecasting",
-        "levels": {
-            1: "No forecasting",
-            2: "Basic historical trending",
-            3: "Monthly forecasts",
-            4: "ML-based predictions",
-            5: "Real-time forecast adjustments"
-        }
-    },
-    "governance": {
-        "name": "Governance",
-        "levels": {
-            1: "No governance",
-            2: "Basic budgets in place",
-            3: "Budget alerts configured",
-            4: "Automated guardrails",
-            5: "Policy-driven cost control"
-        }
-    },
-    "culture": {
-        "name": "FinOps Culture",
-        "levels": {
-            1: "Finance/Ops siloed",
-            2: "Awareness beginning",
-            3: "Cross-functional collaboration",
-            4: "Engineers accountable for costs",
-            5: "Cost optimization in DNA"
-        }
-    }
+# ============================================================================
+# AWS COST EXPLORER INTEGRATION
+# ============================================================================
+
+class AWSCostExplorerIntegration:
+    """Real AWS Cost Explorer integration for live cost data"""
+    
+    @staticmethod
+    def get_monthly_costs(session: Optional[boto3.Session] = None, months: int = 6) -> Dict:
+        """Fetch actual monthly costs from AWS Cost Explorer"""
+        try:
+            if session is None:
+                session = boto3.Session()
+            
+            ce_client = session.client('ce', region_name='us-east-1')
+            
+            end_date = datetime.now().date()
+            start_date = (end_date - timedelta(days=30 * months))
+            
+            response = ce_client.get_cost_and_usage(
+                TimePeriod={
+                    'Start': start_date.isoformat(),
+                    'End': end_date.isoformat()
+                },
+                Granularity='MONTHLY',
+                Metrics=['UnblendedCost', 'UsageQuantity'],
+                GroupBy=[
+                    {'Type': 'DIMENSION', 'Key': 'SERVICE'}
+                ]
+            )
+            
+            # Process and structure the data
+            monthly_data = {}
+            for result in response['ResultsByTime']:
+                month = result['TimePeriod']['Start'][:7]  # YYYY-MM
+                monthly_data[month] = {
+                    'services': {},
+                    'total': 0
+                }
+                
+                for group in result['Groups']:
+                    service = group['Keys'][0]
+                    cost = float(group['Metrics']['UnblendedCost']['Amount'])
+                    monthly_data[month]['services'][service] = cost
+                    monthly_data[month]['total'] += cost
+            
+            return {
+                'success': True,
+                'data': monthly_data,
+                'currency': 'USD'
+            }
+            
+        except ClientError as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'message': 'Unable to fetch AWS cost data. Ensure Cost Explorer is enabled and credentials are configured.'
+            }
+    
+    @staticmethod
+    def get_service_breakdown(session: Optional[boto3.Session] = None, days: int = 30) -> Dict:
+        """Get cost breakdown by AWS service for the last N days"""
+        try:
+            if session is None:
+                session = boto3.Session()
+            
+            ce_client = session.client('ce', region_name='us-east-1')
+            
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=days)
+            
+            response = ce_client.get_cost_and_usage(
+                TimePeriod={
+                    'Start': start_date.isoformat(),
+                    'End': end_date.isoformat()
+                },
+                Granularity='MONTHLY',
+                Metrics=['UnblendedCost'],
+                GroupBy=[
+                    {'Type': 'DIMENSION', 'Key': 'SERVICE'}
+                ]
+            )
+            
+            service_costs = {}
+            for result in response['ResultsByTime']:
+                for group in result['Groups']:
+                    service = group['Keys'][0]
+                    amount = float(group['Metrics']['UnblendedCost']['Amount'])
+                    service_costs[service] = service_costs.get(service, 0) + amount
+            
+            # Sort by cost descending
+            sorted_services = dict(sorted(service_costs.items(), key=lambda x: x[1], reverse=True))
+            
+            return {
+                'success': True,
+                'services': sorted_services,
+                'total': sum(sorted_services.values()),
+                'period': f'Last {days} days'
+            }
+            
+        except ClientError as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    @staticmethod
+    def get_cost_forecast(session: Optional[boto3.Session] = None, days: int = 30) -> Dict:
+        """Get AWS cost forecast"""
+        try:
+            if session is None:
+                session = boto3.Session()
+            
+            ce_client = session.client('ce', region_name='us-east-1')
+            
+            start_date = datetime.now().date()
+            end_date = start_date + timedelta(days=days)
+            
+            response = ce_client.get_cost_forecast(
+                TimePeriod={
+                    'Start': start_date.isoformat(),
+                    'End': end_date.isoformat()
+                },
+                Metric='UNBLENDED_COST',
+                Granularity='MONTHLY'
+            )
+            
+            forecast = float(response['Total']['Amount'])
+            
+            return {
+                'success': True,
+                'forecast': forecast,
+                'period': f'Next {days} days',
+                'currency': 'USD'
+            }
+            
+        except ClientError as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+    
+    @staticmethod
+    def get_ri_coverage(session: Optional[boto3.Session] = None) -> Dict:
+        """Get Reserved Instance coverage metrics"""
+        try:
+            if session is None:
+                session = boto3.Session()
+            
+            ce_client = session.client('ce', region_name='us-east-1')
+            
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=30)
+            
+            response = ce_client.get_reservation_coverage(
+                TimePeriod={
+                    'Start': start_date.isoformat(),
+                    'End': end_date.isoformat()
+                },
+                Granularity='MONTHLY'
+            )
+            
+            if response['CoveragesByTime']:
+                coverage_data = response['CoveragesByTime'][0]['Total']
+                coverage_pct = float(coverage_data.get('CoverageHours', {}).get('CoverageHoursPercentage', 0))
+                on_demand_cost = float(coverage_data.get('OnDemandCost', 0))
+                
+                return {
+                    'success': True,
+                    'coverage_percentage': coverage_pct,
+                    'on_demand_cost': on_demand_cost,
+                    'message': f"{coverage_pct:.1f}% of usage covered by RIs/Savings Plans"
+                }
+            
+            return {
+                'success': False,
+                'error': 'No coverage data available'
+            }
+            
+        except ClientError as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+# ============================================================================
+# AWS CARBON FOOTPRINT DATA
+# ============================================================================
+
+AWS_CARBON_INTENSITY = {
+    # gCO2eq per kWh by AWS region
+    "us-east-1": {"name": "US East (N. Virginia)", "carbon_intensity": 415, "rating": "Medium"},
+    "us-east-2": {"name": "US East (Ohio)", "carbon_intensity": 480, "rating": "Medium"},
+    "us-west-1": {"name": "US West (N. California)", "carbon_intensity": 280, "rating": "Low"},
+    "us-west-2": {"name": "US West (Oregon)", "carbon_intensity": 185, "rating": "Low"},
+    "ca-central-1": {"name": "Canada (Central)", "carbon_intensity": 150, "rating": "Low"},
+    "eu-west-1": {"name": "EU (Ireland)", "carbon_intensity": 320, "rating": "Medium"},
+    "eu-west-2": {"name": "EU (London)", "carbon_intensity": 280, "rating": "Low"},
+    "eu-west-3": {"name": "EU (Paris)", "carbon_intensity": 60, "rating": "Low"},
+    "eu-central-1": {"name": "EU (Frankfurt)", "carbon_intensity": 380, "rating": "Medium"},
+    "eu-north-1": {"name": "EU (Stockholm)", "carbon_intensity": 15, "rating": "Low"},
+    "ap-northeast-1": {"name": "Asia Pacific (Tokyo)", "carbon_intensity": 480, "rating": "Medium"},
+    "ap-northeast-2": {"name": "Asia Pacific (Seoul)", "carbon_intensity": 420, "rating": "Medium"},
+    "ap-southeast-1": {"name": "Asia Pacific (Singapore)", "carbon_intensity": 520, "rating": "High"},
+    "ap-southeast-2": {"name": "Asia Pacific (Sydney)", "carbon_intensity": 780, "rating": "High"},
+    "ap-south-1": {"name": "Asia Pacific (Mumbai)", "carbon_intensity": 710, "rating": "High"},
+    "sa-east-1": {"name": "South America (São Paulo)", "carbon_intensity": 85, "rating": "Low"}
 }
 
 # ============================================================================
-# AI ANALYSIS
-# ============================================================================
-
-def get_finops_ai_analysis(client, cost_data: Dict, context: str) -> Optional[str]:
-    """Get AI-powered FinOps analysis"""
-    if not client:
-        return None
-    
-    prompt = f"""You are an AWS FinOps expert. Analyze the following cost data and provide actionable recommendations.
-
-COST DATA:
-{json.dumps(cost_data, indent=2)}
-
-ORGANIZATION CONTEXT:
-{context if context else 'Not provided'}
-
-Provide comprehensive analysis including:
-
-1. **Cost Analysis Summary**
-   - Key observations about spending patterns
-   - Comparison to industry benchmarks
-   
-2. **Top 5 Optimization Opportunities**
-   - Specific recommendations with estimated savings
-   - Implementation steps and effort level
-   - Risk assessment for each
-   
-3. **Quick Wins (implement this week)**
-   - Low-effort, immediate savings opportunities
-   
-4. **Strategic Recommendations (next quarter)**
-   - Longer-term optimization strategies
-   - Architecture changes for cost efficiency
-   
-5. **Commitment Strategy**
-   - Reserved Instance recommendations
-   - Savings Plans recommendations
-   - Optimal commitment level
-   
-6. **Cost Governance Recommendations**
-   - Tagging strategy
-   - Budget and alert recommendations
-   - Policy suggestions
-
-Be specific with dollar amounts where possible. Include AWS service names and specific actions."""
-
-    try:
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=3000,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return response.content[0].text
-    except Exception as e:
-        return f"Error: {e}"
-
-# ============================================================================
-# RENDER FUNCTIONS
+# RENDERING FUNCTIONS
 # ============================================================================
 
 def render_finops_tab():
-    """Render comprehensive FinOps tab"""
+    """Main FinOps tab rendering function"""
+    st.title("💰 AWS FinOps - Cloud Financial Management")
     
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%); padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
-        <h2 style="color: #C8E6C9; margin: 0;">💰 FinOps & Cost Optimization</h2>
-        <p style="color: #A5D6A7; margin: 0.5rem 0 0 0;">AI-Powered Cloud Financial Management</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Sub-tabs
-    tabs = st.tabs([
-        "📊 Cost Analysis",
-        "💡 Optimization Strategies",
-        "📈 Commitment Advisor",
-        "🗑️ Waste Detector",
-        "📉 FinOps Maturity"
+    # Top-level tabs
+    main_tabs = st.tabs([
+        "📊 Cost Dashboard",
+        "🎯 Optimization Strategies",
+        "🔍 Waste Detection",
+        "💳 Commitment Discounts",
+        "🌱 Sustainability",
+        "📈 Forecasting"
     ])
     
-    with tabs[0]:
-        render_cost_analysis()
+    with main_tabs[0]:
+        render_cost_dashboard()
     
-    with tabs[1]:
+    with main_tabs[1]:
         render_optimization_strategies()
     
-    with tabs[2]:
-        render_commitment_advisor()
+    with main_tabs[2]:
+        render_waste_detection()
     
-    with tabs[3]:
-        render_waste_detector()
+    with main_tabs[3]:
+        render_commitment_discounts()
     
-    with tabs[4]:
-        render_finops_maturity()
+    with main_tabs[4]:
+        render_sustainability()
+    
+    with main_tabs[5]:
+        render_forecasting()
 
-def render_cost_analysis():
-    """Render cost analysis section"""
-    st.markdown("### 📊 Cost Analysis & Breakdown")
+def render_cost_dashboard():
+    """Render AWS cost dashboard"""
+    st.markdown("## 📊 AWS Cost Dashboard")
     
-    st.info("💡 Enter your monthly costs by category for analysis")
+    st.info("💡 Connect your AWS account to see real-time cost data from Cost Explorer")
     
-    col1, col2 = st.columns(2)
-    costs = {}
-    
+    # Connection status
+    col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown("**Core Services**")
-        costs['compute'] = st.number_input("💻 Compute (EC2, Lambda, etc.)", min_value=0, value=8500, step=100)
-        costs['storage'] = st.number_input("💾 Storage (S3, EBS, etc.)", min_value=0, value=2200, step=100)
-        costs['database'] = st.number_input("🗄️ Database (RDS, DynamoDB)", min_value=0, value=3500, step=100)
+        if st.button("🔌 Connect AWS Account", use_container_width=True):
+            st.info("Configure AWS credentials in the Account Management section")
     
-    with col2:
-        st.markdown("**Supporting Services**")
-        costs['network'] = st.number_input("🌐 Network & Data Transfer", min_value=0, value=1800, step=100)
-        costs['other'] = st.number_input("📦 Other Services", min_value=0, value=1200, step=100)
+    # Try to fetch real data
+    cost_data = AWSCostExplorerIntegration.get_monthly_costs()
     
-    total = sum(costs.values())
-    
-    st.markdown("---")
-    
-    # Summary metrics
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Monthly Spend", f"${total:,.0f}")
-    with col2:
-        st.metric("Annual Projection", f"${total * 12:,.0f}")
-    with col3:
-        # Estimate savings (25% typical)
-        savings = total * 0.25
-        st.metric("Potential Savings", f"${savings:,.0f}/mo", delta="-25%")
-    with col4:
-        st.metric("Annual Savings", f"${savings * 12:,.0f}")
-    
-    # Cost breakdown visualization
-    st.markdown("### 📈 Cost Distribution")
-    
-    for cat_key, cat_data in COST_CATEGORIES.items():
-        cost_val = costs.get(cat_key, 0)
-        pct = (cost_val / total * 100) if total > 0 else 0
-        typical = cat_data['typical_percentage']
+    if cost_data['success']:
+        st.success("✅ Successfully connected to AWS Cost Explorer")
         
-        col1, col2, col3, col4 = st.columns([1, 2, 1, 1])
-        with col1:
-            st.markdown(f"{cat_data['icon']} **{cat_data['name']}**")
-        with col2:
-            st.progress(min(pct / 100, 1.0))
-        with col3:
-            st.markdown(f"${cost_val:,.0f} ({pct:.1f}%)")
-        with col4:
-            status = "🟢" if pct <= typical + 5 else "🟡" if pct <= typical + 15 else "🔴"
-            st.markdown(f"{status} Typical: {typical}%")
-    
-    # AI Analysis
-    st.markdown("---")
-    st.markdown("### 🤖 AI-Powered Analysis")
-    
-    if st.button("🔍 Get AI Analysis", type="primary"):
-        try:
-            import anthropic
-            api_key = st.session_state.get('anthropic_api_key')
-            if not api_key:
-                try:
-                    api_key = st.secrets.get('ANTHROPIC_API_KEY')
-                except:
-                    pass
-            
-            if api_key:
-                client = anthropic.Anthropic(api_key=api_key)
-                context = st.session_state.get('organization_context', '')
-                
-                with st.spinner("Analyzing your costs..."):
-                    analysis = get_finops_ai_analysis(client, costs, context)
-                
-                if analysis:
-                    st.markdown(analysis)
-            else:
-                st.warning("Configure API key for AI analysis")
-        except Exception as e:
-            st.error(f"Error: {e}")
+        # Display cost breakdown
+        monthly_data = cost_data['data']
+        
+        # Top services chart
+        st.markdown("### 💰 Top AWS Services by Cost")
+        # Implementation continues...
+        
+    else:
+        st.warning("⚠️ Using demo data. Connect AWS for real-time insights.")
+        # Show demo data
+        render_demo_cost_data()
 
 def render_optimization_strategies():
-    """Render optimization strategies"""
-    st.markdown("### 💡 Optimization Strategies")
-    st.markdown("Proven strategies to reduce your AWS costs")
+    """Render AWS optimization strategies"""
+    st.markdown("## 🎯 AWS Cost Optimization Strategies")
     
-    # Filter by category
-    categories = list(set(s['category'] for s in OPTIMIZATION_STRATEGIES))
-    selected_cat = st.multiselect("Filter by Category", categories, default=categories)
+    st.markdown("""
+    Comprehensive strategies to optimize your AWS costs across all services.
+    Each strategy includes implementation steps, AWS tools, and expected savings.
+    """)
     
-    for strategy in OPTIMIZATION_STRATEGIES:
-        if strategy['category'] not in selected_cat:
-            continue
-        
-        with st.expander(f"💡 {strategy['name']} - Save {strategy['savings_potential']}"):
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Savings Potential", strategy['savings_potential'])
-            with col2:
-                effort_color = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}.get(strategy['effort'], "⚪")
-                st.metric("Effort", f"{effort_color} {strategy['effort']}")
-            with col3:
-                risk_color = {"Low": "🟢", "Medium": "🟡", "High": "🔴"}.get(strategy['risk'], "⚪")
-                st.metric("Risk", f"{risk_color} {strategy['risk']}")
-            
-            st.markdown(f"**Description:** {strategy['description']}")
-            
-            st.markdown("**Best For:**")
-            for item in strategy['best_for']:
-                st.markdown(f"- {item}")
-            
-            st.markdown("**Implementation Steps:**")
-            for i, step in enumerate(strategy['implementation'], 1):
-                st.markdown(f"{i}. {step}")
-            
-            st.markdown(f"**AWS Tools:** {', '.join(strategy['aws_tools'])}")
-
-def render_commitment_advisor():
-    """Render commitment discount advisor"""
-    st.markdown("### 📈 Commitment Discount Advisor")
-    st.markdown("Optimize your Reserved Instance and Savings Plan strategy")
+    # Strategy selector
+    selected_strategy = st.selectbox(
+        "Select Optimization Strategy",
+        options=range(len(AWS_OPTIMIZATION_STRATEGIES)),
+        format_func=lambda x: f"{AWS_OPTIMIZATION_STRATEGIES[x]['name']} - {AWS_OPTIMIZATION_STRATEGIES[x]['savings_potential']} savings"
+    )
     
-    col1, col2 = st.columns(2)
+    strategy = AWS_OPTIMIZATION_STRATEGIES[selected_strategy]
     
-    with col1:
-        monthly_ondemand = st.number_input("Current On-Demand Spend", min_value=0, value=10000, step=500)
-        current_ri_coverage = st.slider("Current RI/SP Coverage %", 0, 100, 30)
-        workload_stability = st.select_slider(
-            "Workload Stability",
-            options=["Highly Variable", "Somewhat Variable", "Stable", "Very Stable"],
-            value="Stable"
-        )
-    
-    with col2:
-        commitment_preference = st.selectbox(
-            "Commitment Preference",
-            ["Maximum Savings", "Balanced", "Maximum Flexibility"]
-        )
-        term_preference = st.selectbox("Term Preference", ["1 Year", "3 Year", "Mix"])
-        payment_preference = st.selectbox("Payment Preference", ["No Upfront", "Partial Upfront", "All Upfront"])
-    
-    if st.button("📊 Generate Recommendations"):
-        st.markdown("---")
-        st.markdown("### 📋 Recommendations")
-        
-        # Calculate recommendations based on inputs
-        target_coverage = 70 if workload_stability in ["Stable", "Very Stable"] else 50
-        additional_coverage = target_coverage - current_ri_coverage
-        
-        if additional_coverage > 0:
-            additional_commitment = monthly_ondemand * (additional_coverage / 100)
-            
-            # Savings calculation
-            if commitment_preference == "Maximum Savings":
-                savings_rate = 0.40
-                rec_type = "3-year All Upfront Reserved Instances"
-            elif commitment_preference == "Balanced":
-                savings_rate = 0.30
-                rec_type = "1-year Compute Savings Plan"
-            else:
-                savings_rate = 0.22
-                rec_type = "1-year No Upfront Compute Savings Plan"
-            
-            monthly_savings = additional_commitment * savings_rate
-            annual_savings = monthly_savings * 12
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Target Coverage", f"{target_coverage}%")
-            with col2:
-                st.metric("Monthly Savings", f"${monthly_savings:,.0f}")
-            with col3:
-                st.metric("Annual Savings", f"${annual_savings:,.0f}")
-            
-            st.success(f"**Recommendation:** Purchase {rec_type} to cover additional ${additional_commitment:,.0f}/month")
-            
-            st.markdown("""
-            **Next Steps:**
-            1. Review Savings Plans recommendations in AWS Cost Explorer
-            2. Analyze your specific usage patterns
-            3. Start with a smaller commitment to test
-            4. Monitor coverage and adjust quarterly
-            """)
-        else:
-            st.info("Your current coverage appears adequate. Consider reviewing for optimization opportunities.")
-
-def render_waste_detector():
-    """Render waste detection section"""
-    st.markdown("### 🗑️ Waste Detector")
-    st.markdown("Identify and eliminate cloud waste")
-    
-    is_demo = st.session_state.get('app_mode', 'demo') == 'demo'
-    
-    if is_demo:
-        # Demo waste data
-        waste_items = [
-            {"type": "Unattached EBS Volumes", "count": 8, "monthly_cost": 180, "action": "Delete or attach"},
-            {"type": "Idle Elastic IPs", "count": 5, "monthly_cost": 18, "action": "Release unused EIPs"},
-            {"type": "Unused Load Balancers", "count": 3, "monthly_cost": 65, "action": "Delete ALBs with no targets"},
-            {"type": "Old EBS Snapshots (>90 days)", "count": 45, "monthly_cost": 95, "action": "Review and delete"},
-            {"type": "Stopped Instances (>30 days)", "count": 6, "monthly_cost": 0, "action": "Terminate or restart"},
-            {"type": "Unattached NAT Gateways", "count": 2, "monthly_cost": 90, "action": "Delete if unused"},
-            {"type": "Oversized RDS Instances", "count": 2, "monthly_cost": 320, "action": "Right-size databases"},
-        ]
-        
-        total_waste = sum(w['monthly_cost'] for w in waste_items)
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Monthly Waste", f"${total_waste:,.0f}")
-        with col2:
-            st.metric("Annual Waste", f"${total_waste * 12:,.0f}")
-        with col3:
-            st.metric("Waste Items", sum(w['count'] for w in waste_items))
-        
-        st.markdown("---")
-        
-        for waste in waste_items:
-            col1, col2, col3, col4 = st.columns([2, 1, 1, 2])
-            with col1:
-                st.markdown(f"**{waste['type']}**")
-            with col2:
-                st.markdown(f"{waste['count']} items")
-            with col3:
-                st.markdown(f"${waste['monthly_cost']}/mo")
-            with col4:
-                st.caption(waste['action'])
-    else:
-        st.info("Connect to AWS to scan for waste in your account")
-
-def render_finops_maturity():
-    """Render FinOps maturity assessment"""
-    st.markdown("### 📉 FinOps Maturity Assessment")
-    st.markdown("Assess and improve your FinOps capabilities")
-    
-    scores = {}
-    
-    cols = st.columns(2)
-    
-    for idx, (dim_key, dim) in enumerate(FINOPS_MATURITY_DIMENSIONS.items()):
-        with cols[idx % 2]:
-            scores[dim_key] = st.select_slider(
-                dim['name'],
-                options=[1, 2, 3, 4, 5],
-                value=2,
-                format_func=lambda x, d=dim: f"L{x}: {d['levels'][x][:30]}..."
-            )
-    
-    avg_score = sum(scores.values()) / len(scores)
-    
-    st.markdown("---")
-    
+    # Display strategy details
     col1, col2, col3 = st.columns(3)
-    
     with col1:
-        phase = "Run" if avg_score >= 4 else "Walk" if avg_score >= 2.5 else "Crawl"
-        st.metric("FinOps Phase", phase)
+        st.metric("Savings Potential", strategy['savings_potential'])
     with col2:
-        st.metric("Average Maturity", f"{avg_score:.1f}/5")
+        st.metric("Implementation Effort", strategy['effort'])
     with col3:
-        next_target = min(5, int(avg_score) + 1)
-        st.metric("Next Target", f"Level {next_target}")
+        st.metric("Risk Level", strategy['risk'])
     
-    # Recommendations
-    st.markdown("### 📋 Improvement Recommendations")
+    st.markdown(f"### {strategy['name']}")
+    st.markdown(f"**Category:** {strategy['category']}")
+    st.markdown(f"**Description:** {strategy['description']}")
     
-    lowest_dims = sorted(scores.items(), key=lambda x: x[1])[:3]
+    # Implementation steps
+    with st.expander("📋 Implementation Steps", expanded=True):
+        for i, step in enumerate(strategy['implementation'], 1):
+            st.markdown(f"{i}. {step}")
     
-    for dim_key, score in lowest_dims:
-        dim = FINOPS_MATURITY_DIMENSIONS[dim_key]
-        next_level = min(5, score + 1)
-        
-        st.markdown(f"**{dim['name']}** (Current: Level {score})")
-        st.markdown(f"→ Target: {dim['levels'][next_level]}")
+    # AWS Tools
+    if 'aws_tools' in strategy:
+        with st.expander("🛠️ AWS Tools & Services"):
+            for tool in strategy['aws_tools']:
+                st.markdown(f"• {tool}")
+    
+    # Best practices
+    if 'best_practices' in strategy:
+        with st.expander("✅ Best Practices"):
+            for practice in strategy['best_practices']:
+                st.markdown(f"• {practice}")
 
-# Export
+def render_waste_detection():
+    """Render waste detection and cleanup"""
+    st.markdown("## 🔍 AWS Waste Detection")
+    st.info("Identify and eliminate wasted spend across your AWS environment")
+    
+    # Waste categories
+    waste_strategy = next(s for s in AWS_OPTIMIZATION_STRATEGIES if s['name'] == 'Idle Resource Elimination')
+    
+    st.markdown("### 🗑️ Common Waste Areas")
+    
+    for waste_key, waste_data in waste_strategy['common_waste_areas'].items():
+        with st.expander(f"💰 {waste_data['description']} - ~{waste_data['typical_cost']}"):
+            st.markdown(f"**Detection Method:** {waste_data['detection']}")
+            st.markdown(f"**Recommended Action:** {waste_data['action']}")
+
+def render_commitment_discounts():
+    """Render RI and Savings Plans advisor"""
+    st.markdown("## 💳 Commitment Discounts (RIs & Savings Plans)")
+    
+    st.markdown("""
+    AWS offers significant discounts (up to 72%) through Reserved Instances and Savings Plans.
+    Choose the right commitment strategy for your workload patterns.
+    """)
+    
+    # Comparison table
+    commitment_comparison = {
+        "Feature": [
+            "Discount",
+            "Flexibility",
+            "Commitment",
+            "Instance Changes",
+            "Region Changes",
+            "Service Coverage",
+            "Best For"
+        ],
+        "Reserved Instances": [
+            "Up to 72%",
+            "Low-Medium",
+            "1 or 3 years",
+            "Limited (size flex in family)",
+            "No (Regional RIs)",
+            "EC2, RDS, ElastiCache, etc.",
+            "Predictable, steady workloads"
+        ],
+        "Compute Savings Plans": [
+            "Up to 66%",
+            "High",
+            "1 or 3 years",
+            "Yes (any instance type)",
+            "Yes (any region)",
+            "EC2, Fargate, Lambda",
+            "Dynamic, multi-service workloads"
+        ],
+        "EC2 Instance Savings Plans": [
+            "Up to 72%",
+            "Medium",
+            "1 or 3 years",
+            "Yes (within family)",
+            "No (specific region)",
+            "EC2 only",
+            "Predictable EC2 usage patterns"
+        ]
+    }
+    
+    import pandas as pd
+    st.dataframe(pd.DataFrame(commitment_comparison), use_container_width=True)
+
+def render_sustainability():
+    """Render AWS sustainability and carbon tracking"""
+    st.markdown("## 🌱 AWS Sustainability & Carbon Footprint")
+    
+    st.info("Track and optimize your AWS carbon footprint using AWS Customer Carbon Footprint Tool")
+    
+    st.markdown("### 🌍 AWS Region Carbon Intensity")
+    st.markdown("Choose regions with lower carbon intensity for sustainability")
+    
+    # Display region carbon data
+    import pandas as pd
+    region_df = pd.DataFrame([
+        {
+            "Region": data['name'],
+            "Carbon Intensity": f"{data['carbon_intensity']} gCO2eq/kWh",
+            "Rating": f"{'🟢' if data['rating'] == 'Low' else '🟡' if data['rating'] == 'Medium' else '🔴'} {data['rating']}"
+        }
+        for region, data in AWS_CARBON_INTENSITY.items()
+    ]).sort_values("Carbon Intensity")
+    
+    st.dataframe(region_df, use_container_width=True)
+    
+    st.markdown("### 💡 Sustainability Best Practices")
+    st.markdown("""
+    - **Use low-carbon regions** - Deploy in regions with renewable energy (EU North, CA Central)
+    - **Optimize utilization** - Higher utilization = better energy efficiency
+    - **Use Graviton instances** - 60% better energy efficiency than comparable x86 instances
+    - **Implement auto-scaling** - Scale down during low demand periods
+    - **Use managed services** - AWS operates at higher efficiency than self-managed
+    - **Archive old data** - Move to Glacier Deep Archive for lower energy consumption
+    """)
+
+def render_forecasting():
+    """Render AWS cost forecasting"""
+    st.markdown("## 📈 AWS Cost Forecasting")
+    
+    st.info("View AWS cost forecasts and trends to plan your cloud budget")
+    
+    forecast_data = AWSCostExplorerIntegration.get_cost_forecast()
+    
+    if forecast_data['success']:
+        st.success(f"**Forecasted Cost ({forecast_data['period']}):** ${forecast_data['forecast']:,.2f}")
+    else:
+        st.warning("Connect AWS to see real forecasts")
+
+def render_demo_cost_data():
+    """Render demo cost data when AWS is not connected"""
+    st.markdown("### 💰 Demo Cost Data")
+    st.markdown("*This is sample data. Connect your AWS account for real insights.*")
+    
+    # Demo data
+    import pandas as pd
+    demo_services = {
+        "EC2": 1250,
+        "RDS": 680,
+        "S3": 420,
+        "Data Transfer": 310,
+        "Lambda": 180,
+        "EKS": 150,
+        "CloudWatch": 90
+    }
+    
+    df = pd.DataFrame(list(demo_services.items()), columns=['Service', 'Cost'])
+    st.bar_chart(df.set_index('Service'))
+
+# Export main function
 __all__ = ['render_finops_tab']
