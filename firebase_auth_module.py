@@ -647,12 +647,32 @@ def render_user_list():
         with st.expander(f"👤 {user.get('display_name', 'Unknown')} ({user.get('email', 'N/A')})"):
             col1, col2 = st.columns([2, 1])
             
+            # Helper function to format dates
+            def format_date(date_value):
+                if date_value is None or date_value == 'Never':
+                    return 'N/A'
+                if isinstance(date_value, str):
+                    return date_value[:10] if len(date_value) >= 10 else date_value
+                # Handle datetime objects (including Firebase DatetimeWithNanoseconds)
+                try:
+                    if hasattr(date_value, 'strftime'):
+                        return date_value.strftime('%Y-%m-%d')
+                    elif hasattr(date_value, 'isoformat'):
+                        return date_value.isoformat()[:10]
+                    else:
+                        return str(date_value)[:10]
+                except:
+                    return 'N/A'
+            
             with col1:
+                created_date = format_date(user.get('created_at', 'N/A'))
+                last_login = format_date(user.get('last_login')) if user.get('last_login') else 'Never'
+                
                 st.markdown(f"""
                 **Role:** {user.get('role', 'N/A').title()}  
                 **Status:** {"🟢 Active" if user.get('active', True) else "🔴 Disabled"}  
-                **Created:** {user.get('created_at', 'N/A')[:10]}  
-                **Last Login:** {user.get('last_login', 'Never')[:10] if user.get('last_login') else 'Never'}  
+                **Created:** {created_date}  
+                **Last Login:** {last_login}  
                 **Assessments:** {user.get('metadata', {}).get('assessments_count', 0)}
                 """)
             
