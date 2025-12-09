@@ -83,7 +83,7 @@ except Exception as e:
     MODULE_ERRORS['landscape_scanner'] = str(e)
 
 try:
-    from eks_modernization import render_eks_modernization_tab
+    from eks_modernization_module import render_eks_modernization_tab
     MODULE_STATUS['EKS & Modernization'] = True
 except Exception as e:
     MODULE_STATUS['EKS & Modernization'] = False
