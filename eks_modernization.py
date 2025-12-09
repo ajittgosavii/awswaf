@@ -1,1309 +1,1651 @@
 """
-EKS Sizing & Component Selection Framework
-Comprehensive guide for capacity planning and technology decisions
+EKS & Container Modernization Module - Enhanced
+Comprehensive AI-Powered Kubernetes Modernization Platform
 
-This module adds to eks_modernization_v2.py:
-1. 📊 EKS Sizing Calculator & Framework
-2. 🔧 Component Selection Decision Trees
-3. 🏗️ Integrated Transformation Guide
-4. 📈 Capacity Planning Tools
+Focus Areas:
+- Organizational challenges (sizing, technology selection, architecture decisions)
+- Best architectural patterns and reference architectures
+- Transformation roadmap and implementation strategies
+- Cost-benefit analysis for modernization initiatives
+- AI-powered personalized recommendations
 """
 
 import streamlit as st
-from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
-import math
+import json
+from datetime import datetime
+from typing import Dict, List, Optional
+from dataclasses import dataclass, field
 
 # ============================================================================
-# EKS SIZING FRAMEWORK
+# ORGANIZATIONAL CHALLENGES FRAMEWORK
 # ============================================================================
 
-@dataclass
-class WorkloadProfile:
-    """Application workload profile for sizing"""
-    name: str
-    replicas: int
-    cpu_request_millicores: int
-    memory_request_mb: int
-    cpu_limit_millicores: int
-    memory_limit_mb: int
-    is_critical: bool
-    can_use_spot: bool
-    requires_gpu: bool = False
+MODERNIZATION_CHALLENGES = {
+    "sizing_capacity": {
+        "name": "Sizing & Capacity Planning",
+        "icon": "📊",
+        "severity": "High",
+        "frequency": "85% of organizations",
+        "description": "Determining the right cluster size, node types, and capacity requirements",
+        "common_issues": [
+            "Over-provisioning leading to 30-50% wasted resources",
+            "Under-provisioning causing performance degradation",
+            "Inability to predict peak load requirements",
+            "Lack of visibility into actual resource utilization",
+            "Difficulty in forecasting growth patterns"
+        ],
+        "symptoms": [
+            "Consistently low CPU/memory utilization (<40%)",
+            "Frequent node scaling events",
+            "Application performance issues during peaks",
+            "Unexpected cost overruns",
+            "Manual intervention required for scaling"
+        ],
+        "solutions": {
+            "short_term": {
+                "actions": [
+                    "Enable AWS Compute Optimizer for right-sizing recommendations",
+                    "Implement comprehensive monitoring with Container Insights",
+                    "Deploy metrics-server and vertical pod autoscaler (VPA)",
+                    "Analyze pod resource requests vs actual usage",
+                    "Set up cost allocation tags by team/application"
+                ],
+                "tools": ["AWS Compute Optimizer", "Container Insights", "Kubecost", "Prometheus"],
+                "timeline": "1-2 weeks",
+                "expected_outcome": "15-25% immediate cost reduction"
+            },
+            "long_term": {
+                "actions": [
+                    "Implement Karpenter for intelligent node provisioning",
+                    "Deploy cluster-proportional-autoscaler for system components",
+                    "Create capacity planning dashboards with historical trends",
+                    "Establish pod resource quotas and limit ranges",
+                    "Implement predictive scaling using machine learning"
+                ],
+                "tools": ["Karpenter", "Prometheus + Thanos", "AI/ML forecasting", "Custom operators"],
+                "timeline": "2-3 months",
+                "expected_outcome": "30-50% optimization + automated management"
+            }
+        },
+        "best_practices": [
+            "Start with 60% capacity buffer, gradually optimize",
+            "Use pod disruption budgets to protect critical workloads",
+            "Implement multi-tier autoscaling (pod → node → cluster)",
+            "Regular capacity reviews every quarter",
+            "Build capacity models based on business metrics"
+        ],
+        "cost_impact": "30-50% of total EKS costs"
+    },
     
-    def get_total_cpu_request(self) -> float:
-        """Total CPU request in cores"""
-        return (self.replicas * self.cpu_request_millicores) / 1000
-    
-    def get_total_memory_request(self) -> float:
-        """Total memory request in GB"""
-        return (self.replicas * self.memory_request_mb) / 1024
-    
-    def get_total_cpu_limit(self) -> float:
-        """Total CPU limit in cores"""
-        return (self.replicas * self.cpu_limit_millicores) / 1000
-    
-    def get_total_memory_limit(self) -> float:
-        """Total memory limit in GB"""
-        return (self.replicas * self.memory_limit_mb) / 1024
-
-@dataclass
-class ClusterSizingResult:
-    """Results of cluster sizing calculation"""
-    total_cpu_needed: float
-    total_memory_needed: float
-    recommended_nodes: int
-    recommended_instance_type: str
-    estimated_monthly_cost: float
-    overhead_percentage: float
-    safety_buffer: float
-    spot_eligible_percentage: float
-    
-    def get_cost_breakdown(self) -> Dict:
-        """Detailed cost breakdown"""
-        on_demand_cost = self.estimated_monthly_cost * (1 - self.spot_eligible_percentage/100)
-        spot_cost = self.estimated_monthly_cost * (self.spot_eligible_percentage/100) * 0.3  # 70% savings
-        return {
-            'on_demand': on_demand_cost,
-            'spot': spot_cost,
-            'total': on_demand_cost + spot_cost,
-            'savings': self.estimated_monthly_cost - (on_demand_cost + spot_cost)
-        }
-
-def render_eks_sizing_calculator():
-    """Interactive EKS sizing calculator"""
-    st.markdown("## 📊 EKS Cluster Sizing Calculator")
-    
-    st.markdown("""
-    ### Why Sizing Matters
-    
-    **Over-provisioning (40-60% of organizations):**
-    - 💸 Wasting $1000s per month
-    - 🎯 Running at 20-30% utilization
-    - 😰 Fear of running out of capacity
-    
-    **Under-provisioning (20-30% of organizations):**
-    - 🔴 Application performance issues
-    - 📈 Constant scaling events
-    - 🚨 Production incidents
-    
-    **Right-sizing (Goal):**
-    - ✅ 60-70% average utilization
-    - 💰 Optimal cost efficiency
-    - 📊 Room for burst traffic
-    - 🎯 Predictable performance
-    """)
-    
-    st.markdown("---")
-    
-    # Sizing method selection
-    sizing_method = st.radio(
-        "Choose Your Sizing Approach",
-        [
-            "🎯 Quick Estimate (Based on current infrastructure)",
-            "📊 Detailed Workload Analysis (Recommended)",
-            "🧮 Formula-Based Calculation (Advanced)"
+    "technology_selection": {
+        "name": "Technology Stack Selection",
+        "icon": "🔧",
+        "severity": "Critical",
+        "frequency": "90% of organizations",
+        "description": "Choosing the right tools and technologies from the overwhelming Kubernetes ecosystem",
+        "common_issues": [
+            "Analysis paralysis from too many options",
+            "Vendor lock-in concerns with managed services",
+            "Incompatible tool combinations",
+            "Technical debt from early technology choices",
+            "Team skill gaps with selected technologies"
+        ],
+        "decision_framework": {
+            "criteria": [
+                {
+                    "name": "Team Expertise",
+                    "weight": "25%",
+                    "considerations": [
+                        "Current team skills and experience",
+                        "Learning curve and training requirements",
+                        "Community support and documentation",
+                        "Hiring availability for specialists"
+                    ]
+                },
+                {
+                    "name": "Operational Complexity",
+                    "weight": "30%",
+                    "considerations": [
+                        "Day-2 operations burden",
+                        "Maintenance and upgrade overhead",
+                        "Troubleshooting and debugging ease",
+                        "Integration with existing tools"
+                    ]
+                },
+                {
+                    "name": "Business Requirements",
+                    "weight": "25%",
+                    "considerations": [
+                        "Performance requirements",
+                        "Security and compliance needs",
+                        "Multi-cloud/hybrid requirements",
+                        "Vendor neutrality importance"
+                    ]
+                },
+                {
+                    "name": "Total Cost of Ownership",
+                    "weight": "20%",
+                    "considerations": [
+                        "Licensing costs",
+                        "Infrastructure overhead",
+                        "Team size requirements",
+                        "Support and enterprise features"
+                    ]
+                }
+            ]
+        },
+        "technology_maturity_model": {
+            "level_1_basic": {
+                "name": "Foundation (Months 0-3)",
+                "focus": "Core Kubernetes + AWS Native Services",
+                "recommended_stack": [
+                    "EKS Managed Control Plane",
+                    "Cluster Autoscaler (simple autoscaling)",
+                    "AWS Load Balancer Controller",
+                    "EBS CSI Driver for storage",
+                    "Container Insights for monitoring",
+                    "kubectl + Helm for deployments"
+                ],
+                "rationale": "Minimize complexity, leverage AWS integration, low learning curve",
+                "team_size": "2-3 engineers"
+            },
+            "level_2_intermediate": {
+                "name": "Scale & Optimize (Months 3-9)",
+                "focus": "Operational Excellence + Cost Optimization",
+                "recommended_stack": [
+                    "Karpenter (advanced autoscaling)",
+                    "Prometheus + Grafana (observability)",
+                    "FluxCD or ArgoCD (GitOps)",
+                    "External Secrets Operator",
+                    "Cert-manager for TLS",
+                    "Kyverno or OPA for policies"
+                ],
+                "rationale": "Proven tools, active communities, production-ready",
+                "team_size": "4-6 engineers"
+            },
+            "level_3_advanced": {
+                "name": "Innovation & Governance (Months 9+)",
+                "focus": "Advanced Patterns + Multi-Cluster",
+                "recommended_stack": [
+                    "Service Mesh (Istio/Linkerd)",
+                    "Multi-cluster management",
+                    "Advanced security (Falco, Trivy)",
+                    "Custom operators",
+                    "FinOps automation",
+                    "Chaos engineering"
+                ],
+                "rationale": "Microservices at scale, complex requirements, mature team",
+                "team_size": "8+ engineers with specialized roles"
+            }
+        },
+        "common_mistakes": [
+            "Adopting service mesh too early (before microservices maturity)",
+            "Over-engineering for current scale",
+            "Choosing tools based on hype rather than needs",
+            "Ignoring operational burden of tool choices",
+            "Not considering team skill development timeline"
         ]
-    )
+    },
     
-    if "Quick Estimate" in sizing_method:
-        render_quick_sizing_estimate()
-    elif "Detailed Workload" in sizing_method:
-        render_detailed_workload_sizing()
-    else:
-        render_formula_based_sizing()
+    "architecture_patterns": {
+        "name": "Architecture & Design Decisions",
+        "icon": "🏗️",
+        "severity": "Critical",
+        "frequency": "78% of organizations",
+        "description": "Designing the right architecture for workloads, networking, security, and operations",
+        "common_issues": [
+            "Monolithic architecture migrated to containers without decomposition",
+            "Improper network segmentation and security boundaries",
+            "Inadequate disaster recovery and high availability design",
+            "Poor secret management and credential handling",
+            "Insufficient observability and troubleshooting capabilities"
+        ],
+        "architecture_layers": {
+            "workload_architecture": {
+                "name": "Workload Architecture",
+                "patterns": [
+                    {
+                        "pattern": "Microservices with Sidecar Pattern",
+                        "use_case": "Complex applications requiring service mesh",
+                        "pros": ["Fine-grained control", "Rich observability", "Traffic management"],
+                        "cons": ["Resource overhead", "Increased complexity"],
+                        "best_for": "Large teams, 50+ services"
+                    },
+                    {
+                        "pattern": "Modular Monolith",
+                        "use_case": "Mid-size applications transitioning to microservices",
+                        "pros": ["Simpler operations", "Lower overhead", "Easier debugging"],
+                        "cons": ["Limited independent scaling", "Deployment coupling"],
+                        "best_for": "Teams under 20, growing applications"
+                    },
+                    {
+                        "pattern": "Serverless Hybrid (EKS + Lambda)",
+                        "use_case": "Event-driven workloads with variable load",
+                        "pros": ["Cost efficient", "Auto-scaling", "No server management"],
+                        "cons": ["Cold start latency", "Limited execution time"],
+                        "best_for": "Batch processing, APIs with variable traffic"
+                    }
+                ]
+            },
+            "network_architecture": {
+                "name": "Network Architecture",
+                "key_decisions": [
+                    {
+                        "decision": "IP Address Management",
+                        "options": [
+                            {
+                                "option": "AWS VPC CNI (Native)",
+                                "pros": ["Native AWS integration", "Direct pod networking", "Simple security groups"],
+                                "cons": ["IP address exhaustion", "ENI limits"],
+                                "recommendation": "Default choice for most workloads"
+                            },
+                            {
+                                "option": "Calico",
+                                "pros": ["Network policies", "No IP exhaustion", "On-premises consistency"],
+                                "cons": ["Additional complexity", "Encapsulation overhead"],
+                                "recommendation": "For IP-constrained environments or network policy requirements"
+                            }
+                        ]
+                    },
+                    {
+                        "decision": "Ingress Strategy",
+                        "options": [
+                            {
+                                "option": "AWS Load Balancer Controller",
+                                "pros": ["Native AWS integration", "Automatic ALB/NLB provisioning", "WAF integration"],
+                                "cons": ["AWS-specific", "Load balancer costs"],
+                                "recommendation": "Primary choice for AWS-native applications"
+                            },
+                            {
+                                "option": "NGINX Ingress + NLB",
+                                "pros": ["Vendor neutral", "Advanced routing", "Lower cost"],
+                                "cons": ["Manual management", "Additional configuration"],
+                                "recommendation": "For multi-cloud or advanced routing requirements"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "security_architecture": {
+                "name": "Security Architecture",
+                "layers": [
+                    {
+                        "layer": "Cluster Security",
+                        "controls": [
+                            "Private API endpoint with bastion host or VPN",
+                            "Pod security standards (restricted profile)",
+                            "Network policies for pod-to-pod communication",
+                            "IRSA (IAM Roles for Service Accounts) for least privilege",
+                            "Encryption at rest (EBS, EFS) and in transit (TLS)"
+                        ]
+                    },
+                    {
+                        "layer": "Workload Security",
+                        "controls": [
+                            "Container image scanning (ECR, Trivy)",
+                            "Runtime security monitoring (Falco, GuardDuty)",
+                            "Secret management (External Secrets Operator + Secrets Manager)",
+                            "Resource quotas and limit ranges",
+                            "Security context constraints"
+                        ]
+                    },
+                    {
+                        "layer": "Identity & Access",
+                        "controls": [
+                            "RBAC with least privilege principle",
+                            "AWS SSO integration for human access",
+                            "Service accounts with IRSA for workload access",
+                            "Audit logging to CloudWatch/S3",
+                            "MFA enforcement for cluster admin access"
+                        ]
+                    }
+                ]
+            }
+        }
+    },
+    
+    "operational_readiness": {
+        "name": "Operational Readiness",
+        "icon": "⚙️",
+        "severity": "High",
+        "frequency": "82% of organizations",
+        "description": "Preparing teams and processes for production Kubernetes operations",
+        "readiness_dimensions": {
+            "observability": {
+                "name": "Observability & Monitoring",
+                "requirements": [
+                    "Centralized logging (CloudWatch Container Insights or EFK)",
+                    "Metrics collection (Prometheus + Grafana)",
+                    "Distributed tracing (X-Ray or Jaeger)",
+                    "Application performance monitoring",
+                    "Cost visibility and allocation"
+                ],
+                "kpis": [
+                    "Mean time to detect (MTTD) < 5 minutes",
+                    "Mean time to resolve (MTTR) < 30 minutes",
+                    "Service availability > 99.9%",
+                    "Alert noise ratio < 5%"
+                ]
+            },
+            "incident_management": {
+                "name": "Incident Management",
+                "requirements": [
+                    "Runbook automation for common scenarios",
+                    "On-call rotation and escalation procedures",
+                    "Post-incident review process",
+                    "Chaos engineering practices",
+                    "Disaster recovery drills"
+                ],
+                "tools": ["PagerDuty/OpsGenie", "Incident.io", "AWS Systems Manager", "Chaos Mesh"]
+            },
+            "change_management": {
+                "name": "Change Management",
+                "requirements": [
+                    "GitOps workflow (ArgoCD/FluxCD)",
+                    "Progressive delivery (canary/blue-green)",
+                    "Automated testing pipeline",
+                    "Change approval process",
+                    "Rollback procedures"
+                ],
+                "success_criteria": [
+                    "100% of changes tracked in Git",
+                    "Zero manual kubectl applies in production",
+                    "Automated validation before production",
+                    "Rollback capability for all changes"
+                ]
+            }
+        }
+    }
+}
 
-def render_quick_sizing_estimate():
-    """Quick sizing based on current infrastructure"""
-    st.markdown("### 🎯 Quick Estimate Method")
-    
-    st.info("""
-    **Best for:** Initial planning when migrating from VMs/EC2
-    
-    **Accuracy:** ±30% (refine with actual usage data)
-    """)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        current_vms = st.number_input("Number of Current VMs/Instances", min_value=1, value=10)
-        avg_cpu_cores = st.number_input("Average vCPUs per VM", min_value=1, value=4)
-        avg_memory_gb = st.number_input("Average Memory (GB) per VM", min_value=1, value=16)
-    
-    with col2:
-        current_utilization = st.slider("Current Average Utilization %", 10, 90, 40)
-        target_utilization = st.slider("Target EKS Utilization %", 50, 80, 65)
-        growth_factor = st.slider("Expected Growth in 12 Months %", 0, 200, 20)
-    
-    if st.button("Calculate Cluster Size", use_container_width=True):
-        # Calculate current capacity
-        total_cpu = current_vms * avg_cpu_cores
-        total_memory = current_vms * avg_memory_gb
-        
-        # Adjust for actual usage
-        actual_cpu_used = total_cpu * (current_utilization / 100)
-        actual_memory_used = total_memory * (current_utilization / 100)
-        
-        # Calculate needed capacity with growth
-        needed_cpu = actual_cpu_used * (1 + growth_factor / 100)
-        needed_memory = actual_memory_used * (1 + growth_factor / 100)
-        
-        # Account for target utilization
-        required_cpu = needed_cpu / (target_utilization / 100)
-        required_memory = needed_memory / (target_utilization / 100)
-        
-        # Add Kubernetes overhead (15-20%)
-        overhead_factor = 1.20
-        final_cpu = required_cpu * overhead_factor
-        final_memory = required_memory * overhead_factor
-        
-        # Recommend instance type
-        instance_recommendation = recommend_instance_type(final_cpu, final_memory)
-        
-        # Display results
-        st.success("### 📈 Sizing Recommendations")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Required CPU Cores", f"{final_cpu:.1f}")
-            st.caption(f"Current: {total_cpu} → {actual_cpu_used:.1f} used")
-        with col2:
-            st.metric("Required Memory (GB)", f"{final_memory:.1f}")
-            st.caption(f"Current: {total_memory} → {actual_memory_used:.1f} used")
-        with col3:
-            st.metric("Recommended Nodes", f"{instance_recommendation['node_count']}")
-            st.caption(f"Instance: {instance_recommendation['instance_type']}")
-        
-        st.markdown("---")
-        
-        # Cost estimate
-        cost_estimate = calculate_cost_estimate(
-            instance_recommendation['instance_type'],
-            instance_recommendation['node_count'],
-            spot_percentage=50
-        )
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("### 💰 Estimated Monthly Cost")
-            st.metric("Total Cost", f"${cost_estimate['total']:,.0f}/month")
-            st.caption(f"On-Demand: ${cost_estimate['on_demand']:,.0f} + Spot: ${cost_estimate['spot']:,.0f}")
-        
-        with col2:
-            st.markdown("### 💡 Cost Optimization Potential")
-            savings = calculate_potential_savings(cost_estimate['total'])
-            st.metric("Potential Savings", f"${savings:,.0f}/month", delta="-40%")
-            st.caption("With right-sizing + Spot + Karpenter")
-        
-        # Detailed breakdown
-        with st.expander("📊 Detailed Breakdown"):
-            st.markdown(f"""
-            **Capacity Planning:**
-            - Current VMs: {current_vms} × {avg_cpu_cores} vCPU × {avg_memory_gb} GB
-            - Current Total: {total_cpu} vCPU, {total_memory} GB RAM
-            - Actual Usage ({current_utilization}%): {actual_cpu_used:.1f} vCPU, {actual_memory_used:.1f} GB
-            - With Growth ({growth_factor}%): {needed_cpu:.1f} vCPU, {needed_memory:.1f} GB
-            - Target Utilization ({target_utilization}%): {required_cpu:.1f} vCPU, {required_memory:.1f} GB
-            - With K8s Overhead (20%): {final_cpu:.1f} vCPU, {final_memory:.1f} GB
-            
-            **Architecture:**
-            - Instance Type: {instance_recommendation['instance_type']}
-            - Per-Instance: {instance_recommendation['vcpu']} vCPU, {instance_recommendation['memory_gb']} GB
-            - Node Count: {instance_recommendation['node_count']} nodes
-            - Distribution: 3 AZs ({instance_recommendation['node_count']//3} nodes per AZ)
-            - Spot Eligible: ~50% (for non-critical workloads)
-            
-            **Cost Breakdown:**
-            - Base Monthly (On-Demand): ${cost_estimate['base']:,.0f}
-            - With 50% Spot (70% discount): ${cost_estimate['total']:,.0f}
-            - Potential Optimizations: ${savings:,.0f} additional savings
-            """)
-        
-        # Next steps
-        st.markdown("### 🎯 Next Steps")
-        st.info("""
-        1. **Start Conservative:** Begin with these numbers, monitor for 2 weeks
-        2. **Enable Monitoring:** Install metrics-server and Container Insights
-        3. **Track Utilization:** Aim for 60-70% average, 80-85% peak
-        4. **Right-size Weekly:** Review and adjust based on actual usage
-        5. **Add Karpenter:** Automate sizing decisions (Month 2-3)
-        """)
+# ============================================================================
+# ARCHITECTURAL PATTERNS & REFERENCE ARCHITECTURES
+# ============================================================================
 
-def render_detailed_workload_sizing():
-    """Detailed workload-by-workload sizing"""
-    st.markdown("### 📊 Detailed Workload Analysis")
+REFERENCE_ARCHITECTURES = {
+    "high_availability_multi_az": {
+        "name": "High Availability Multi-AZ Architecture",
+        "icon": "🏢",
+        "complexity": "Medium",
+        "use_case": "Production workloads requiring 99.99% availability",
+        "description": "Enterprise-grade HA architecture with multi-AZ distribution and automated failover",
+        "components": {
+            "control_plane": {
+                "configuration": "EKS managed across 3 AZs",
+                "rationale": "AWS manages HA and failover automatically",
+                "cost": "~$0.10/hour ($73/month)"
+            },
+            "data_plane": {
+                "configuration": [
+                    "3 managed node groups, one per AZ",
+                    "Mixed instance types with priorities",
+                    "Auto Scaling Groups with termination policies",
+                    "Pod anti-affinity for critical workloads"
+                ],
+                "rationale": "Ensures application availability during AZ failure",
+                "cost_optimization": "Use Karpenter to optimize instance selection across AZs"
+            },
+            "networking": {
+                "configuration": [
+                    "VPC with private subnets in 3 AZs",
+                    "NAT Gateway in each AZ (HA)",
+                    "Application Load Balancer with cross-zone load balancing",
+                    "Network Load Balancer for internal services"
+                ],
+                "rationale": "Eliminates single points of failure in network path"
+            },
+            "storage": {
+                "configuration": [
+                    "EBS volumes with gp3 storage class",
+                    "EFS for shared storage (automatically multi-AZ)",
+                    "Regular EBS snapshots to S3"
+                ],
+                "rationale": "Persistent storage survives AZ failures"
+            },
+            "resilience_features": [
+                "Pod Disruption Budgets (PDB) for all critical services",
+                "Topology spread constraints for even distribution",
+                "Health checks and automatic pod restart",
+                "Horizontal Pod Autoscaler for demand changes",
+                "Cluster Autoscaler or Karpenter for node scaling"
+            ]
+        },
+        "implementation_steps": [
+            {
+                "phase": "Phase 1: Foundation (Week 1-2)",
+                "tasks": [
+                    "Create VPC with 3 public + 3 private subnets",
+                    "Deploy EKS cluster with private endpoint",
+                    "Configure managed node groups in each AZ",
+                    "Install AWS Load Balancer Controller",
+                    "Set up Container Insights monitoring"
+                ]
+            },
+            {
+                "phase": "Phase 2: Resilience (Week 3-4)",
+                "tasks": [
+                    "Configure Pod Disruption Budgets",
+                    "Implement topology spread constraints",
+                    "Set up Horizontal Pod Autoscalers",
+                    "Deploy cluster-proportional-autoscaler",
+                    "Configure pod anti-affinity rules"
+                ]
+            },
+            {
+                "phase": "Phase 3: Validation (Week 5-6)",
+                "tasks": [
+                    "Chaos engineering - simulate AZ failure",
+                    "Load testing across zones",
+                    "Validate failover times",
+                    "Document runbooks",
+                    "Train operations team"
+                ]
+            }
+        ],
+        "estimated_cost": {
+            "control_plane": "$73/month",
+            "nodes": "$500-2000/month (depends on workload)",
+            "nat_gateways": "$96/month (3 x $32)",
+            "load_balancers": "$50-100/month",
+            "total": "$719-2269/month base + workload"
+        },
+        "availability_target": "99.99% (52 minutes downtime/year)"
+    },
     
-    st.info("""
-    **Best for:** Accurate capacity planning with known application requirements
+    "cost_optimized_spot_heavy": {
+        "name": "Cost-Optimized Spot-Heavy Architecture",
+        "icon": "💰",
+        "complexity": "Medium-High",
+        "use_case": "Fault-tolerant workloads prioritizing cost savings",
+        "description": "Aggressive cost optimization using Spot instances with intelligent diversification",
+        "target_savings": "60-80% compared to on-demand",
+        "components": {
+            "node_strategy": {
+                "configuration": [
+                    "10-20% on-demand for critical system components",
+                    "80-90% Spot instances with Karpenter",
+                    "Multiple instance families (c5, c6, m5, m6, r5, r6)",
+                    "Both x86 and Graviton (arm64) instances"
+                ],
+                "spot_interruption_handling": [
+                    "Karpenter automatic rebalancing",
+                    "2-minute interruption warning handling",
+                    "Graceful pod termination (terminationGracePeriodSeconds)",
+                    "Pod Disruption Budgets to control drain rate"
+                ]
+            },
+            "workload_patterns": {
+                "critical_workloads": {
+                    "description": "Control plane, auth services, monitoring",
+                    "strategy": "On-demand instances with pod anti-affinity",
+                    "percentage": "10-15% of total capacity"
+                },
+                "production_workloads": {
+                    "description": "Application pods with multiple replicas",
+                    "strategy": "70% Spot + 30% on-demand mix",
+                    "percentage": "60-70% of total capacity"
+                },
+                "batch_workloads": {
+                    "description": "Jobs, cron jobs, data processing",
+                    "strategy": "100% Spot instances",
+                    "percentage": "15-20% of total capacity"
+                }
+            },
+            "karpenter_provisioner": {
+                "configuration": """
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: cost-optimized
+spec:
+  template:
+    spec:
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64", "arm64"]
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: ["c", "m", "r"]
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: ["5"]
+      nodeClassRef:
+        name: default
+  disruption:
+    consolidationPolicy: WhenUnderutilized
+    consolidateAfter: 30s
+    expireAfter: 720h # 30 days
+  weight: 10
+---
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: on-demand-critical
+spec:
+  template:
+    spec:
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+      nodeClassRef:
+        name: default
+  weight: 100
+                """
+            }
+        },
+        "cost_breakdown": {
+            "on_demand_baseline": "$1000/month",
+            "with_spot_optimization": "$250-400/month",
+            "savings": "60-75%",
+            "risk_mitigation_cost": "$50/month (monitoring, automation)"
+        },
+        "risk_mitigation": [
+            "Diversification across 10+ instance types",
+            "Multi-AZ distribution",
+            "Automatic capacity rebalancing",
+            "Application-level resilience (multiple replicas)",
+            "Monitoring and alerting for interruption rates"
+        ]
+    },
     
-    **Accuracy:** ±10% (high accuracy)
-    """)
+    "microservices_service_mesh": {
+        "name": "Microservices with Service Mesh",
+        "icon": "🕸️",
+        "complexity": "High",
+        "use_case": "Large-scale microservices requiring advanced traffic management",
+        "description": "Enterprise microservices architecture with Istio service mesh for traffic control and observability",
+        "prerequisites": [
+            "50+ microservices",
+            "Multiple teams",
+            "Complex routing requirements",
+            "Dedicated platform team (3+ engineers)"
+        ],
+        "architecture_layers": {
+            "service_mesh": {
+                "technology": "Istio",
+                "components": [
+                    "Istiod (control plane) - manages configuration",
+                    "Envoy sidecars - data plane proxy in each pod",
+                    "Ingress Gateway - entry point for external traffic",
+                    "Egress Gateway - controlled external access"
+                ],
+                "features": [
+                    "Automatic mTLS between all services",
+                    "Advanced traffic routing (canary, A/B testing)",
+                    "Circuit breaking and retries",
+                    "Distributed tracing integration",
+                    "Request metrics and logging"
+                ]
+            },
+            "observability_stack": {
+                "metrics": "Prometheus + Grafana + Kiali",
+                "tracing": "Jaeger or AWS X-Ray",
+                "logging": "CloudWatch Container Insights",
+                "service_map": "Kiali for visualization"
+            },
+            "deployment_patterns": [
+                {
+                    "pattern": "Canary Deployment",
+                    "description": "Gradual traffic shift to new version",
+                    "configuration": "Istio VirtualService with weight-based routing",
+                    "use_case": "Risk mitigation for production releases"
+                },
+                {
+                    "pattern": "Circuit Breaking",
+                    "description": "Prevent cascading failures",
+                    "configuration": "DestinationRule with connection pool settings",
+                    "use_case": "Protecting downstream services"
+                },
+                {
+                    "pattern": "A/B Testing",
+                    "description": "Route traffic based on headers/cookies",
+                    "configuration": "VirtualService with header-based matching",
+                    "use_case": "Feature testing and experimentation"
+                }
+            ]
+        },
+        "resource_overhead": {
+            "cpu": "10-15% additional (Envoy sidecars)",
+            "memory": "50-100MB per pod (sidecar)",
+            "latency": "1-2ms per hop (sidecar processing)",
+            "recommendation": "Budget 20% additional capacity"
+        },
+        "implementation_timeline": {
+            "phase_1": "2-3 months (pilot with 5-10 services)",
+            "phase_2": "3-6 months (full rollout)",
+            "phase_3": "Ongoing (advanced features)",
+            "team_investment": "1-2 full-time platform engineers"
+        }
+    },
     
-    st.markdown("#### Define Your Workloads")
+    "hybrid_serverless": {
+        "name": "Hybrid EKS + Serverless",
+        "icon": "⚡",
+        "complexity": "Medium",
+        "use_case": "Mixed workloads - containers for stateful, Lambda for event-driven",
+        "description": "Optimal cost-performance by combining EKS for long-running services with Lambda for event processing",
+        "architecture_split": {
+            "eks_workloads": [
+                "API servers (always-on)",
+                "Databases and stateful services",
+                "WebSocket connections",
+                "Long-running batch jobs",
+                "Services requiring complex dependencies"
+            ],
+            "lambda_workloads": [
+                "Event processors (SQS, SNS, EventBridge)",
+                "Scheduled tasks",
+                "Webhook handlers",
+                "Image/video processing",
+                "Simple REST APIs with low traffic"
+            ]
+        },
+        "integration_patterns": {
+            "eks_to_lambda": {
+                "method": "Direct invocation via AWS SDK",
+                "use_case": "Offload heavy processing from API",
+                "example": "Image upload → EKS API → Lambda for resize → S3"
+            },
+            "lambda_to_eks": {
+                "method": "HTTP calls to EKS services via ALB",
+                "use_case": "Event triggers that need stateful processing",
+                "example": "S3 event → Lambda → EKS service for business logic"
+            },
+            "shared_data": {
+                "method": "SQS queues, S3 buckets, DynamoDB",
+                "use_case": "Asynchronous communication",
+                "example": "EKS produces to SQS → Lambda consumers process"
+            }
+        },
+        "cost_optimization": {
+            "savings": "40-60% vs all-EKS",
+            "eks_cost": "$500/month (baseline services)",
+            "lambda_cost": "$50-200/month (variable load)",
+            "data_transfer": "$20-50/month (VPC endpoints reduce cost)"
+        }
+    }
+}
+
+# ============================================================================
+# TRANSFORMATION ROADMAP FRAMEWORK
+# ============================================================================
+
+TRANSFORMATION_ROADMAP = {
+    "assessment_phase": {
+        "name": "Assessment & Planning",
+        "duration": "4-6 weeks",
+        "icon": "🔍",
+        "objectives": [
+            "Understand current state and technical debt",
+            "Identify key challenges and constraints",
+            "Define success criteria and KPIs",
+            "Build business case for modernization"
+        ],
+        "activities": {
+            "week_1_2": {
+                "name": "Current State Analysis",
+                "tasks": [
+                    "Inventory existing applications and infrastructure",
+                    "Document dependencies and integrations",
+                    "Assess team skills and gaps",
+                    "Review current costs and utilization",
+                    "Identify compliance and security requirements"
+                ],
+                "deliverables": [
+                    "Application portfolio inventory",
+                    "Current architecture diagrams",
+                    "Skills assessment matrix",
+                    "Cost baseline report"
+                ]
+            },
+            "week_3_4": {
+                "name": "Target State Design",
+                "tasks": [
+                    "Define reference architecture",
+                    "Select technology stack",
+                    "Design network and security architecture",
+                    "Plan disaster recovery strategy",
+                    "Estimate target state costs"
+                ],
+                "deliverables": [
+                    "Target architecture blueprints",
+                    "Technology selection matrix",
+                    "Security and compliance framework",
+                    "TCO analysis and ROI projection"
+                ]
+            },
+            "week_5_6": {
+                "name": "Roadmap Development",
+                "tasks": [
+                    "Prioritize applications for migration",
+                    "Define migration waves",
+                    "Identify quick wins",
+                    "Create detailed project plan",
+                    "Secure stakeholder buy-in"
+                ],
+                "deliverables": [
+                    "Migration prioritization matrix (6R framework)",
+                    "Wave-based migration plan",
+                    "Resource allocation plan",
+                    "Risk register and mitigation strategies"
+                ]
+            }
+        },
+        "key_questions": [
+            "What business outcomes are we optimizing for?",
+            "What are our cost, performance, and reliability targets?",
+            "What level of risk can we accept during migration?",
+            "What is our timeline and resource availability?",
+            "How will we measure success?"
+        ]
+    },
     
-    # Initialize session state for workloads
-    if 'workloads' not in st.session_state:
-        st.session_state.workloads = []
+    "foundation_phase": {
+        "name": "Foundation & Pilot",
+        "duration": "8-12 weeks",
+        "icon": "🏗️",
+        "objectives": [
+            "Build production-ready EKS foundation",
+            "Establish operational processes",
+            "Migrate pilot applications",
+            "Validate architecture decisions"
+        ],
+        "week_by_week": {
+            "weeks_1_2": {
+                "focus": "Infrastructure Foundation",
+                "tasks": [
+                    "Set up AWS Organizations structure",
+                    "Create VPCs and networking (Hub-spoke or multi-VPC)",
+                    "Deploy EKS cluster(s) with best practices",
+                    "Configure IAM roles and IRSA",
+                    "Set up monitoring and logging"
+                ],
+                "success_criteria": [
+                    "EKS cluster operational in all AZs",
+                    "Network connectivity validated",
+                    "Monitoring dashboards live",
+                    "Security baselines implemented"
+                ]
+            },
+            "weeks_3_4": {
+                "focus": "Platform Services",
+                "tasks": [
+                    "Deploy ingress controller",
+                    "Set up cert-manager for TLS",
+                    "Install External Secrets Operator",
+                    "Configure autoscaling (HPA, VPA, Cluster Autoscaler)",
+                    "Implement GitOps (ArgoCD/FluxCD)"
+                ],
+                "success_criteria": [
+                    "All platform services operational",
+                    "TLS certificates auto-renewing",
+                    "GitOps workflow functional",
+                    "Test application deployed successfully"
+                ]
+            },
+            "weeks_5_8": {
+                "focus": "Pilot Migration",
+                "tasks": [
+                    "Select 2-3 pilot applications",
+                    "Containerize applications",
+                    "Create Kubernetes manifests",
+                    "Set up CI/CD pipelines",
+                    "Migrate pilot applications"
+                ],
+                "success_criteria": [
+                    "Pilot apps running in production",
+                    "Performance meets SLAs",
+                    "Team confident with workflows",
+                    "Lessons learned documented"
+                ]
+            },
+            "weeks_9_12": {
+                "focus": "Optimization & Lessons",
+                "tasks": [
+                    "Tune resource requests/limits",
+                    "Optimize costs with Karpenter/Spot",
+                    "Enhance monitoring and alerting",
+                    "Document runbooks",
+                    "Conduct retrospective"
+                ],
+                "success_criteria": [
+                    "Cost optimization targets met",
+                    "Operations runbooks complete",
+                    "Team training completed",
+                    "Go/No-go decision for scale-out"
+                ]
+            }
+        }
+    },
     
-    # Add workload form
-    with st.expander("➕ Add Workload", expanded=len(st.session_state.workloads) == 0):
-        with st.form("add_workload"):
-            col1, col2, col3 = st.columns(3)
+    "scale_out_phase": {
+        "name": "Scale-Out & Migration",
+        "duration": "3-9 months (depends on portfolio size)",
+        "icon": "📈",
+        "objectives": [
+            "Migrate application portfolio systematically",
+            "Scale platform capabilities",
+            "Achieve cost optimization targets",
+            "Build operational maturity"
+        ],
+        "migration_waves": {
+            "wave_1_quick_wins": {
+                "duration": "Month 1-2",
+                "criteria": [
+                    "Stateless applications",
+                    "Low business criticality",
+                    "Simple architecture",
+                    "No compliance requirements"
+                ],
+                "apps_count": "5-10 applications",
+                "risk": "Low",
+                "objective": "Build confidence and momentum"
+            },
+            "wave_2_mainstream": {
+                "duration": "Month 2-5",
+                "criteria": [
+                    "Production workloads",
+                    "Medium complexity",
+                    "Standard architecture patterns",
+                    "Moderate business impact"
+                ],
+                "apps_count": "20-30 applications",
+                "risk": "Medium",
+                "objective": "Migrate bulk of portfolio"
+            },
+            "wave_3_complex": {
+                "duration": "Month 5-9",
+                "criteria": [
+                    "Stateful applications",
+                    "High business criticality",
+                    "Complex dependencies",
+                    "Compliance requirements (PCI, HIPAA)"
+                ],
+                "apps_count": "5-15 applications",
+                "risk": "High",
+                "objective": "Complete migration with careful planning"
+            }
+        },
+        "parallel_workstreams": [
+            {
+                "stream": "Application Migration",
+                "team": "Application teams + Platform team",
+                "cadence": "2-week sprints",
+                "activities": ["Containerization", "Testing", "Cutover", "Validation"]
+            },
+            {
+                "stream": "Platform Enhancement",
+                "team": "Platform engineering team",
+                "cadence": "Continuous",
+                "activities": ["Add capabilities", "Scale infrastructure", "Optimize costs", "Security hardening"]
+            },
+            {
+                "stream": "Operations Maturity",
+                "team": "SRE team",
+                "cadence": "Continuous",
+                "activities": ["Runbook creation", "Chaos testing", "Incident drills", "Process improvement"]
+            }
+        ]
+    },
+    
+    "optimization_phase": {
+        "name": "Continuous Optimization",
+        "duration": "Ongoing",
+        "icon": "🎯",
+        "objectives": [
+            "Achieve and maintain cost targets",
+            "Improve reliability and performance",
+            "Enhance developer experience",
+            "Drive innovation with new capabilities"
+        ],
+        "optimization_areas": {
+            "cost_optimization": {
+                "initiatives": [
+                    "Karpenter adoption for 30-50% savings",
+                    "Spot instance utilization (60-90% savings)",
+                    "Right-sizing based on actual usage",
+                    "Reserved Instances/Savings Plans for baseline",
+                    "Idle resource cleanup automation"
+                ],
+                "target": "40-60% cost reduction vs initial deployment",
+                "tools": ["Kubecost", "CloudHealth", "AWS Cost Optimizer"]
+            },
+            "reliability_optimization": {
+                "initiatives": [
+                    "Chaos engineering program",
+                    "SLI/SLO definition and tracking",
+                    "Automated remediation",
+                    "Multi-region disaster recovery",
+                    "Service mesh for advanced patterns"
+                ],
+                "target": "99.95%+ availability for critical services",
+                "tools": ["Chaos Mesh", "Litmus", "Gremlin"]
+            },
+            "performance_optimization": {
+                "initiatives": [
+                    "Application profiling and tuning",
+                    "Graviton migration (20-40% better price-performance)",
+                    "CDN and edge optimization",
+                    "Database query optimization",
+                    "Caching strategies"
+                ],
+                "target": "50% latency reduction, 2x throughput",
+                "tools": ["Datadog APM", "New Relic", "X-Ray"]
+            },
+            "developer_experience": {
+                "initiatives": [
+                    "Internal developer platform (IDP)",
+                    "Self-service provisioning",
+                    "Standardized templates",
+                    "Automated testing and deployment",
+                    "Developer documentation portal"
+                ],
+                "target": "10x faster deployment, 50% less tickets",
+                "tools": ["Backstage", "Crossplane", "Port"]
+            }
+        },
+        "governance_framework": {
+            "review_cadence": {
+                "daily": "Cost anomaly review, incident review",
+                "weekly": "Capacity planning, performance trends",
+                "monthly": "Cost optimization review, security posture",
+                "quarterly": "Architecture review, roadmap planning"
+            },
+            "kpis": [
+                "Cost per transaction",
+                "Application availability (SLI/SLO)",
+                "Mean time to deploy",
+                "Mean time to recover",
+                "Developer satisfaction score"
+            ]
+        }
+    }
+}
+
+# ============================================================================
+# IMPLEMENTATION GUIDES
+# ============================================================================
+
+def render_challenges_assessment():
+    """Render organizational challenges assessment"""
+    st.markdown("## 🎯 Organizational Challenges & Solutions")
+    
+    for challenge_key, challenge in MODERNIZATION_CHALLENGES.items():
+        with st.expander(f"{challenge['icon']} {challenge['name']} - {challenge['severity']} Priority"):
+            st.markdown(f"**Affects:** {challenge['frequency']}")
+            st.markdown(f"**Description:** {challenge['description']}")
+            
+            col1, col2 = st.columns(2)
             
             with col1:
-                name = st.text_input("Workload Name", "web-app")
-                replicas = st.number_input("Number of Replicas", 1, 100, 3)
-                is_critical = st.checkbox("Critical Service", value=True)
+                st.markdown("### 🔴 Common Issues")
+                for issue in challenge.get('common_issues', []):
+                    st.markdown(f"• {issue}")
             
             with col2:
-                cpu_request = st.number_input("CPU Request (millicores)", 100, 8000, 500)
-                cpu_limit = st.number_input("CPU Limit (millicores)", 100, 16000, 1000)
-                can_use_spot = st.checkbox("Spot Eligible", value=not is_critical)
+                if 'symptoms' in challenge:
+                    st.markdown("### 📊 Symptoms")
+                    for symptom in challenge['symptoms']:
+                        st.markdown(f"• {symptom}")
             
-            with col3:
-                memory_request = st.number_input("Memory Request (MB)", 128, 32768, 1024)
-                memory_limit = st.number_input("Memory Limit (MB)", 128, 65536, 2048)
-            
-            if st.form_submit_button("Add Workload"):
-                workload = WorkloadProfile(
-                    name=name,
-                    replicas=replicas,
-                    cpu_request_millicores=cpu_request,
-                    cpu_limit_millicores=cpu_limit,
-                    memory_request_mb=memory_request,
-                    memory_limit_mb=memory_limit,
-                    is_critical=is_critical,
-                    can_use_spot=can_use_spot
-                )
-                st.session_state.workloads.append(workload)
-                st.success(f"Added {name}")
-                st.rerun()
-    
-    # Display current workloads
-    if st.session_state.workloads:
-        st.markdown("#### Your Workloads")
-        
-        for i, workload in enumerate(st.session_state.workloads):
-            col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
-            with col1:
-                st.text(f"🔹 {workload.name}")
-            with col2:
-                st.text(f"{workload.replicas} replicas")
-            with col3:
-                st.text(f"{workload.get_total_cpu_request():.2f} CPU")
-            with col4:
-                st.text(f"{workload.get_total_memory_request():.2f} GB")
-            with col5:
-                if st.button("🗑️", key=f"delete_{i}"):
-                    st.session_state.workloads.pop(i)
-                    st.rerun()
-        
-        # Calculate cluster size
-        if st.button("🧮 Calculate Required Cluster Size", use_container_width=True):
-            result = calculate_cluster_from_workloads(st.session_state.workloads)
-            display_sizing_results(result, st.session_state.workloads)
+            if 'solutions' in challenge:
+                st.markdown("### 💡 Solutions")
+                
+                tab1, tab2 = st.tabs(["Quick Wins (1-2 weeks)", "Strategic (2-3 months)"])
+                
+                with tab1:
+                    solution = challenge['solutions']['short_term']
+                    st.markdown(f"**Timeline:** {solution['timeline']}")
+                    st.markdown(f"**Expected Outcome:** {solution['expected_outcome']}")
+                    st.markdown("**Actions:**")
+                    for action in solution['actions']:
+                        st.markdown(f"• {action}")
+                    st.markdown(f"**Tools:** {', '.join(solution['tools'])}")
+                
+                with tab2:
+                    solution = challenge['solutions']['long_term']
+                    st.markdown(f"**Timeline:** {solution['timeline']}")
+                    st.markdown(f"**Expected Outcome:** {solution['expected_outcome']}")
+                    st.markdown("**Actions:**")
+                    for action in solution['actions']:
+                        st.markdown(f"• {action}")
+                    st.markdown(f"**Tools:** {', '.join(solution['tools'])}")
 
-def calculate_cluster_from_workloads(workloads: List[WorkloadProfile]) -> ClusterSizingResult:
-    """Calculate cluster size from workload profiles"""
+def render_reference_architectures():
+    """Render reference architectures"""
+    st.markdown("## 🏗️ Reference Architectures & Patterns")
     
-    # Sum up all workload requirements
-    total_cpu_request = sum(w.get_total_cpu_request() for w in workloads)
-    total_memory_request = sum(w.get_total_memory_request() for w in workloads)
-    
-    # Add Kubernetes system overhead (15-20%)
-    k8s_overhead = 0.20
-    cpu_with_overhead = total_cpu_request * (1 + k8s_overhead)
-    memory_with_overhead = total_memory_request * (1 + k8s_overhead)
-    
-    # Add safety buffer (15-20% for burst traffic)
-    safety_buffer = 0.20
-    final_cpu = cpu_with_overhead * (1 + safety_buffer)
-    final_memory = memory_with_overhead * (1 + safety_buffer)
-    
-    # Calculate spot eligibility
-    spot_eligible_cpu = sum(w.get_total_cpu_request() for w in workloads if w.can_use_spot)
-    spot_percentage = (spot_eligible_cpu / total_cpu_request * 100) if total_cpu_request > 0 else 0
-    
-    # Recommend instance type and count
-    instance_rec = recommend_instance_type(final_cpu, final_memory)
-    
-    # Calculate costs
-    cost_est = calculate_cost_estimate(
-        instance_rec['instance_type'],
-        instance_rec['node_count'],
-        spot_percentage
+    arch_selection = st.selectbox(
+        "Select Reference Architecture",
+        options=list(REFERENCE_ARCHITECTURES.keys()),
+        format_func=lambda x: f"{REFERENCE_ARCHITECTURES[x]['icon']} {REFERENCE_ARCHITECTURES[x]['name']}"
     )
     
-    return ClusterSizingResult(
-        total_cpu_needed=final_cpu,
-        total_memory_needed=final_memory,
-        recommended_nodes=instance_rec['node_count'],
-        recommended_instance_type=instance_rec['instance_type'],
-        estimated_monthly_cost=cost_est['total'],
-        overhead_percentage=k8s_overhead * 100,
-        safety_buffer=safety_buffer * 100,
-        spot_eligible_percentage=spot_percentage
-    )
+    arch = REFERENCE_ARCHITECTURES[arch_selection]
+    
+    st.markdown(f"### {arch['icon']} {arch['name']}")
+    st.markdown(f"**Complexity:** {arch['complexity']}")
+    st.markdown(f"**Use Case:** {arch['use_case']}")
+    st.markdown(f"**Description:** {arch['description']}")
+    
+    if 'target_savings' in arch:
+        st.success(f"💰 **Target Savings:** {arch['target_savings']}")
+    
+    # Components
+    st.markdown("### 📦 Architecture Components")
+    for comp_key, comp_value in arch['components'].items():
+        with st.expander(f"🔧 {comp_key.replace('_', ' ').title()}"):
+            if isinstance(comp_value, dict):
+                for key, value in comp_value.items():
+                    if isinstance(value, list):
+                        st.markdown(f"**{key.replace('_', ' ').title()}:**")
+                        for item in value:
+                            st.markdown(f"• {item}")
+                    else:
+                        st.markdown(f"**{key.replace('_', ' ').title()}:** {value}")
+            elif isinstance(comp_value, list):
+                for item in comp_value:
+                    st.markdown(f"• {item}")
+    
+    # Implementation Steps
+    if 'implementation_steps' in arch:
+        st.markdown("### 📋 Implementation Steps")
+        for step in arch['implementation_steps']:
+            with st.expander(f"📍 {step['phase']}"):
+                st.markdown("**Tasks:**")
+                for task in step['tasks']:
+                    st.markdown(f"• {task}")
+    
+    # Cost Breakdown
+    if 'estimated_cost' in arch:
+        st.markdown("### 💰 Estimated Monthly Cost")
+        cost_data = arch['estimated_cost']
+        for key, value in cost_data.items():
+            st.markdown(f"**{key.replace('_', ' ').title()}:** {value}")
 
-def display_sizing_results(result: ClusterSizingResult, workloads: List[WorkloadProfile]):
-    """Display detailed sizing results"""
-    st.success("### ✅ Cluster Sizing Complete")
+def render_transformation_roadmap():
+    """Render transformation roadmap"""
+    st.markdown("## 🗺️ Transformation Roadmap")
     
-    # Top metrics
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total CPU", f"{result.total_cpu_needed:.1f} cores")
-    with col2:
-        st.metric("Total Memory", f"{result.total_memory_needed:.1f} GB")
-    with col3:
-        st.metric("Nodes Required", result.recommended_nodes)
-    with col4:
-        st.metric("Instance Type", result.recommended_instance_type)
+    # Roadmap overview
+    st.markdown("""
+    A structured approach to EKS modernization ensuring systematic migration with minimal risk.
+    Each phase builds on the previous, with clear milestones and go/no-go decision points.
+    """)
     
-    st.markdown("---")
+    # Phase selection
+    phase_options = {
+        "assessment_phase": "🔍 Assessment & Planning (4-6 weeks)",
+        "foundation_phase": "🏗️ Foundation & Pilot (8-12 weeks)",
+        "scale_out_phase": "📈 Scale-Out & Migration (3-9 months)",
+        "optimization_phase": "🎯 Continuous Optimization (Ongoing)"
+    }
     
-    # Cost breakdown
-    cost_breakdown = result.get_cost_breakdown()
+    selected_phase = st.selectbox("Select Phase", options=list(phase_options.keys()),
+                                   format_func=lambda x: phase_options[x])
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("### 💰 Cost Estimate")
-        st.metric("Monthly Cost", f"${cost_breakdown['total']:,.0f}")
-        st.caption(f"""
-        On-Demand: ${cost_breakdown['on_demand']:,.0f}
-        Spot ({result.spot_eligible_percentage:.0f}% workloads): ${cost_breakdown['spot']:,.0f}
-        **Savings:** ${cost_breakdown['savings']:,.0f}/month from Spot
-        """)
+    phase = TRANSFORMATION_ROADMAP[selected_phase]
     
-    with col2:
-        st.markdown("### 📊 Capacity Breakdown")
-        st.progress(result.spot_eligible_percentage / 100)
-        st.caption(f"{result.spot_eligible_percentage:.0f}% Spot Eligible | {100-result.spot_eligible_percentage:.0f}% On-Demand")
+    st.markdown(f"### {phase['icon']} {phase['name']}")
+    st.markdown(f"**Duration:** {phase['duration']}")
     
-    # Workload distribution
-    with st.expander("📋 Workload Distribution Analysis"):
-        st.markdown("**Critical vs Non-Critical:**")
-        critical = [w for w in workloads if w.is_critical]
-        non_critical = [w for w in workloads if not w.is_critical]
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown(f"**Critical ({len(critical)}):** On-Demand nodes")
-            for w in critical:
-                st.text(f"  • {w.name}: {w.get_total_cpu_request():.2f} CPU, {w.get_total_memory_request():.2f} GB")
-        
-        with col2:
-            st.markdown(f"**Non-Critical ({len(non_critical)}):** Spot eligible")
-            for w in non_critical:
-                st.text(f"  • {w.name}: {w.get_total_cpu_request():.2f} CPU, {w.get_total_memory_request():.2f} GB")
+    st.markdown("### 🎯 Objectives")
+    for obj in phase['objectives']:
+        st.markdown(f"• {obj}")
     
-    # Architecture recommendation
-    with st.expander("🏗️ Recommended Architecture"):
-        st.markdown(f"""
-        **Node Configuration:**
-        - Instance Type: {result.recommended_instance_type}
-        - Total Nodes: {result.recommended_nodes}
-        - Distribution: 3 AZs ({result.recommended_nodes // 3} nodes per AZ)
-        
-        **Node Groups:**
-        1. **On-Demand Critical (30-40% capacity)**
-           - For critical services (databases, auth, monitoring)
-           - Instance Type: {result.recommended_instance_type}
-           - Min: {max(3, result.recommended_nodes // 3)} nodes
-        
-        2. **Spot Best-Effort (60-70% capacity)**
-           - For stateless workloads
-           - Multiple instance types for diversification
-           - Managed by Karpenter for optimal selection
-        
-        **Autoscaling:**
-        - Use Karpenter for intelligent node provisioning
-        - Set HPA for pod-level scaling
-        - Configure PDB to protect critical services
-        """)
+    # Phase-specific content
+    if 'activities' in phase:
+        st.markdown("### 📅 Weekly Activities")
+        for week_key, week_data in phase['activities'].items():
+            with st.expander(f"📍 {week_data['name']}"):
+                st.markdown("**Tasks:**")
+                for task in week_data['tasks']:
+                    st.markdown(f"• {task}")
+                st.markdown("**Deliverables:**")
+                for deliverable in week_data['deliverables']:
+                    st.markdown(f"✅ {deliverable}")
     
-    # Implementation guide
-    st.markdown("### 🚀 Implementation Guide")
+    if 'week_by_week' in phase:
+        st.markdown("### 📅 Detailed Timeline")
+        for week_key, week_data in phase['week_by_week'].items():
+            with st.expander(f"📍 {week_key.replace('_', ' ').title()}: {week_data['focus']}"):
+                st.markdown("**Tasks:**")
+                for task in week_data['tasks']:
+                    st.markdown(f"• {task}")
+                st.markdown("**Success Criteria:**")
+                for criteria in week_data['success_criteria']:
+                    st.markdown(f"✅ {criteria}")
     
-    tab1, tab2, tab3 = st.tabs(["Week 1: Setup", "Week 2: Deploy", "Week 3: Optimize"])
+    if 'migration_waves' in phase:
+        st.markdown("### 🌊 Migration Waves")
+        for wave_key, wave_data in phase['migration_waves'].items():
+            with st.expander(f"🌊 {wave_data.get('duration', 'Phase')}"):
+                st.markdown(f"**Risk Level:** {wave_data.get('risk', 'N/A')}")
+                st.markdown(f"**Objective:** {wave_data.get('objective', '')}")
+                st.markdown(f"**Apps Count:** {wave_data.get('apps_count', 'N/A')}")
+                st.markdown("**Selection Criteria:**")
+                for criterion in wave_data.get('criteria', []):
+                    st.markdown(f"• {criterion}")
+
+# ============================================================================
+# MAIN RENDERING FUNCTION
+# ============================================================================
+
+def render_eks_modernization_tab():
+    """Main rendering function for EKS modernization"""
+    st.title("🐳 EKS & Container Modernization")
+    
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "🎯 Challenges & Solutions",
+        "🏗️ Reference Architectures",
+        "🗺️ Transformation Roadmap",
+        "📚 Implementation Guides"
+    ])
     
     with tab1:
-        st.markdown("""
-        **Week 1: Cluster Setup**
-        
-        ```bash
-        # Create EKS cluster with your sizing
-        eksctl create cluster \\
-          --name production \\
-          --version 1.28 \\
-          --region us-east-1 \\
-          --nodes {result.recommended_nodes} \\
-          --node-type {result.recommended_instance_type} \\
-          --nodes-min {max(3, result.recommended_nodes // 2)} \\
-          --nodes-max {result.recommended_nodes * 2}
-        
-        # Install metrics-server
-        kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-        
-        # Install Container Insights
-        # Follow: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/Container-Insights-setup-EKS-quickstart.html
-        ```
-        
-        **Deliverable:** Running EKS cluster with monitoring
-        """)
+        render_challenges_assessment()
     
     with tab2:
-        st.markdown("""
-        **Week 2: Deploy Workloads**
-        
-        Deploy your workloads one by one, monitoring resource usage:
-        
-        ```yaml
-        # Example deployment with your calculated resources
-        apiVersion: apps/v1
-        kind: Deployment
-        metadata:
-          name: web-app
-        spec:
-          replicas: 3
-          template:
-            spec:
-              containers:
-              - name: app
-                resources:
-                  requests:
-                    cpu: "500m"
-                    memory: "1024Mi"
-                  limits:
-                    cpu: "1000m"
-                    memory: "2048Mi"
-        ```
-        
-        **Monitor:** CPU/Memory utilization should be 60-70%
-        """)
+        render_reference_architectures()
     
     with tab3:
-        st.markdown("""
-        **Week 3: Right-size Based on Actuals**
+        render_transformation_roadmap()
+    
+    with tab4:
+        st.markdown("## 📚 Detailed Implementation Guides")
+        st.info("Select a guide for step-by-step implementation instructions")
         
-        ```bash
-        # Check actual resource usage
-        kubectl top pods --all-namespaces
-        kubectl top nodes
+        guide_options = [
+            "Karpenter Setup Guide",
+            "ArgoCD GitOps Guide",
+            "Multi-AZ HA Setup",
+            "Spot Instance Strategy",
+            "Istio Service Mesh"
+        ]
         
-        # Get right-sizing recommendations
-        kubectl describe vpa <vpa-name>
-        ```
+        selected_guide = st.selectbox("Select Implementation Guide", guide_options)
         
-        **Actions:**
-        - Reduce over-provisioned resources (< 50% usage)
-        - Increase under-provisioned (> 80% usage)
-        - Update deployment manifests with new values
-        - Plan Karpenter adoption for dynamic sizing
-        """)
+        if selected_guide == "Karpenter Setup Guide":
+            render_karpenter_guide()
+        elif selected_guide == "ArgoCD GitOps Guide":
+            render_argocd_guide()
+        elif selected_guide == "Multi-AZ HA Setup":
+            render_multi_az_guide()
+        elif selected_guide == "Spot Instance Strategy":
+            render_spot_strategy_guide()
+        elif selected_guide == "Istio Service Mesh":
+            render_istio_guide()
 
-def render_formula_based_sizing():
-    """Advanced formula-based sizing"""
-    st.markdown("### 🧮 Formula-Based Calculation")
-    
-    st.info("""
-    **Best for:** Advanced users who understand their workload patterns
-    
-    **Use this when:** You have detailed metrics from existing systems
-    """)
+def render_karpenter_guide():
+    """Karpenter implementation guide"""
+    st.markdown("## ⚡ Karpenter Setup Guide")
     
     st.markdown("""
-    ### Sizing Formula
+    ### Overview
+    Karpenter is a flexible, high-performance Kubernetes cluster autoscaler that helps
+    improve application availability and cluster efficiency by rapidly launching
+    right-sized compute resources in response to changing application load.
     
-    ```
-    Required_Capacity = (Workload_Demand × (1 + Growth_Factor)) / Target_Utilization × (1 + Overhead) × (1 + Buffer)
-    
-    Where:
-    - Workload_Demand: Current actual usage
-    - Growth_Factor: Expected growth (e.g., 0.20 for 20%)
-    - Target_Utilization: Desired average utilization (e.g., 0.65 for 65%)
-    - Overhead: Kubernetes system overhead (typically 0.15-0.20)
-    - Buffer: Safety buffer for burst traffic (typically 0.15-0.20)
-    ```
+    ### Prerequisites
+    - EKS cluster version 1.27+
+    - kubectl and Helm installed
+    - AWS CLI configured
     """)
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("#### Input Parameters")
-        workload_cpu = st.number_input("Current CPU Demand (cores)", 1.0, 1000.0, 50.0, 0.1)
-        workload_memory = st.number_input("Current Memory Demand (GB)", 1.0, 2000.0, 100.0, 0.1)
-        growth_factor = st.slider("Expected Growth %", 0, 100, 20) / 100
-        target_util = st.slider("Target Utilization %", 50, 85, 65) / 100
-    
-    with col2:
-        st.markdown("#### Advanced Settings")
-        overhead = st.slider("K8s Overhead %", 10, 30, 20) / 100
-        buffer = st.slider("Safety Buffer %", 10, 30, 20) / 100
-        spot_percentage = st.slider("Spot Instance %", 0, 90, 60)
-    
-    # Calculate
-    required_cpu = (workload_cpu * (1 + growth_factor)) / target_util * (1 + overhead) * (1 + buffer)
-    required_memory = (workload_memory * (1 + growth_factor)) / target_util * (1 + overhead) * (1 + buffer)
-    
-    st.markdown("---")
-    st.markdown("### 📊 Results")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Required CPU", f"{required_cpu:.1f} cores")
-        st.caption(f"From: {workload_cpu} current demand")
-    with col2:
-        st.metric("Required Memory", f"{required_memory:.1f} GB")
-        st.caption(f"From: {workload_memory} GB current demand")
-    
-    # Instance recommendation
-    instance_rec = recommend_instance_type(required_cpu, required_memory)
-    cost_est = calculate_cost_estimate(instance_rec['instance_type'], instance_rec['node_count'], spot_percentage)
-    
-    st.markdown(f"""
-    **Recommended Configuration:**
-    - Instance Type: {instance_rec['instance_type']}
-    - Node Count: {instance_rec['node_count']}
-    - Monthly Cost: ${cost_est['total']:,.0f}
-    """)
-
-def recommend_instance_type(cpu_cores: float, memory_gb: float) -> Dict:
-    """Recommend AWS instance type based on requirements"""
-    
-    # Instance type catalog with pricing
-    instances = [
-        {'type': 't3.medium', 'vcpu': 2, 'memory': 4, 'price': 0.0416},
-        {'type': 't3.large', 'vcpu': 2, 'memory': 8, 'price': 0.0832},
-        {'type': 't3.xlarge', 'vcpu': 4, 'memory': 16, 'price': 0.1664},
-        {'type': 't3.2xlarge', 'vcpu': 8, 'memory': 32, 'price': 0.3328},
-        {'type': 'm5.large', 'vcpu': 2, 'memory': 8, 'price': 0.096},
-        {'type': 'm5.xlarge', 'vcpu': 4, 'memory': 16, 'price': 0.192},
-        {'type': 'm5.2xlarge', 'vcpu': 8, 'memory': 32, 'price': 0.384},
-        {'type': 'm5.4xlarge', 'vcpu': 16, 'memory': 64, 'price': 0.768},
-        {'type': 'm6i.large', 'vcpu': 2, 'memory': 8, 'price': 0.096},
-        {'type': 'm6i.xlarge', 'vcpu': 4, 'memory': 16, 'price': 0.192},
-        {'type': 'm6i.2xlarge', 'vcpu': 8, 'memory': 32, 'price': 0.384},
-        {'type': 'c5.large', 'vcpu': 2, 'memory': 4, 'price': 0.085},
-        {'type': 'c5.xlarge', 'vcpu': 4, 'memory': 8, 'price': 0.17},
-        {'type': 'c5.2xlarge', 'vcpu': 8, 'memory': 16, 'price': 0.34},
-        {'type': 'r5.large', 'vcpu': 2, 'memory': 16, 'price': 0.126},
-        {'type': 'r5.xlarge', 'vcpu': 4, 'memory': 32, 'price': 0.252},
-        {'type': 'r5.2xlarge', 'vcpu': 8, 'memory': 64, 'price': 0.504},
-    ]
-    
-    # Calculate CPU-to-memory ratio
-    ratio = cpu_cores / memory_gb if memory_gb > 0 else 1
-    
-    # Find best-fit instance
-    best_instance = None
-    min_nodes = float('inf')
-    
-    for instance in instances:
-        # Accounting for system overhead, use 90% of instance capacity
-        usable_cpu = instance['vcpu'] * 0.9
-        usable_memory = instance['memory'] * 0.9
+    with st.expander("🔧 Step 1: Create IAM Resources"):
+        st.markdown("Create the IAM role and policies for Karpenter")
         
-        # Calculate nodes needed
-        nodes_for_cpu = math.ceil(cpu_cores / usable_cpu)
-        nodes_for_memory = math.ceil(memory_gb / usable_memory)
-        nodes_needed = max(nodes_for_cpu, nodes_for_memory)
-        
-        # Ensure at least 3 nodes for HA (1 per AZ)
-        nodes_needed = max(nodes_needed, 3)
-        
-        # Find instance with minimum nodes needed
-        if nodes_needed < min_nodes:
-            min_nodes = nodes_needed
-            best_instance = {
-                'instance_type': instance['type'],
-                'vcpu': instance['vcpu'],
-                'memory_gb': instance['memory'],
-                'node_count': nodes_needed,
-                'hourly_price': instance['price'],
-                'monthly_price': instance['price'] * 730  # hours per month
-            }
-    
-    return best_instance
-
-def calculate_cost_estimate(instance_type: str, node_count: int, spot_percentage: float) -> Dict:
-    """Calculate estimated monthly cost"""
-    
-    # Get instance pricing (simplified)
-    pricing = {
-        't3.medium': 0.0416, 't3.large': 0.0832, 't3.xlarge': 0.1664, 't3.2xlarge': 0.3328,
-        'm5.large': 0.096, 'm5.xlarge': 0.192, 'm5.2xlarge': 0.384, 'm5.4xlarge': 0.768,
-        'm6i.large': 0.096, 'm6i.xlarge': 0.192, 'm6i.2xlarge': 0.384,
-        'c5.large': 0.085, 'c5.xlarge': 0.17, 'c5.2xlarge': 0.34,
-        'r5.large': 0.126, 'r5.xlarge': 0.252, 'r5.2xlarge': 0.504,
-    }
-    
-    hourly_price = pricing.get(instance_type, 0.192)  # Default to m5.xlarge
-    hours_per_month = 730
-    
-    # Calculate costs
-    base_monthly = hourly_price * hours_per_month * node_count
-    
-    # With Spot instances (70% discount on Spot portion)
-    on_demand_nodes = node_count * (1 - spot_percentage / 100)
-    spot_nodes = node_count * (spot_percentage / 100)
-    
-    on_demand_cost = on_demand_nodes * hourly_price * hours_per_month
-    spot_cost = spot_nodes * hourly_price * hours_per_month * 0.3  # 70% savings
-    total_with_spot = on_demand_cost + spot_cost
-    
-    return {
-        'base': base_monthly,
-        'on_demand': on_demand_cost,
-        'spot': spot_cost,
-        'total': total_with_spot,
-        'savings': base_monthly - total_with_spot
-    }
-
-def calculate_potential_savings(current_cost: float) -> float:
-    """Calculate potential savings with full optimization"""
-    # Right-sizing (20%), Spot (40%), Karpenter optimization (10%)
-    return current_cost * 0.40
-
-# ============================================================================
-# COMPONENT SELECTION DECISION FRAMEWORK
-# ============================================================================
-
-def render_component_selection_guide():
-    """Interactive decision tree for selecting EKS components"""
-    st.markdown("## 🔧 Component Selection Framework")
-    
-    st.markdown("""
-    ### Making Technology Decisions
-    
-    Selecting the right components is critical. Too many tools = operational burden.
-    Too few tools = missing important capabilities.
-    
-    **This framework helps you decide WHEN to adopt each technology.**
-    """)
-    
-    # Component categories
-    component_type = st.selectbox(
-        "What type of component are you evaluating?",
-        [
-            "📈 Autoscaling (Karpenter vs Cluster Autoscaler)",
-            "🕸️ Service Mesh (Istio vs Linkerd vs App Mesh vs None)",
-            "🔄 GitOps (ArgoCD vs FluxCD vs None)",
-            "📊 Monitoring (Prometheus vs CloudWatch vs Both)",
-            "🔐 Secrets Management (External Secrets vs Sealed Secrets vs Native)",
-            "🌐 Ingress (ALB Controller vs NGINX vs Both)",
-            "💾 Storage (EBS CSI vs EFS vs Both)",
-        ]
-    )
-    
-    if "Autoscaling" in component_type:
-        render_autoscaling_decision()
-    elif "Service Mesh" in component_type:
-        render_service_mesh_decision()
-    elif "GitOps" in component_type:
-        render_gitops_decision()
-    elif "Monitoring" in component_type:
-        render_monitoring_decision()
-    elif "Secrets" in component_type:
-        render_secrets_decision()
-    elif "Ingress" in component_type:
-        render_ingress_decision()
-    elif "Storage" in component_type:
-        render_storage_decision()
-
-def render_autoscaling_decision():
-    """Decision framework for autoscaling"""
-    st.markdown("### 📈 Autoscaling: Karpenter vs Cluster Autoscaler")
-    
-    st.markdown("#### Answer these questions:")
-    
-    workload_pattern = st.radio(
-        "What's your workload pattern?",
-        [
-            "Stable and predictable (same load 24/7)",
-            "Variable with some patterns (business hours)",
-            "Highly variable and unpredictable (spiky traffic)"
-        ]
-    )
-    
-    team_experience = st.radio(
-        "Team's Kubernetes experience?",
-        [
-            "Beginner (< 6 months with K8s)",
-            "Intermediate (6-18 months)",
-            "Advanced (18+ months, production experience)"
-        ]
-    )
-    
-    cost_priority = st.radio(
-        "How important is cost optimization?",
-        [
-            "Critical - must minimize costs",
-            "Important - want good cost/performance balance",
-            "Secondary - features and reliability first"
-        ]
-    )
-    
-    if st.button("Get Recommendation", use_container_width=True):
-        # Decision logic
-        if team_experience == "Beginner (< 6 months with K8s)":
-            recommendation = "cluster_autoscaler"
-            reason = "Lower learning curve, well-documented, easier troubleshooting"
-        elif cost_priority == "Critical - must minimize costs":
-            recommendation = "karpenter"
-            reason = "20-50% better cost optimization through intelligent provisioning"
-        elif workload_pattern == "Highly variable and unpredictable (spiky traffic)":
-            recommendation = "karpenter"
-            reason = "Faster scaling (seconds vs minutes), better bin-packing"
-        elif team_experience == "Intermediate (6-18 months)":
-            recommendation = "start_ca_migrate_karpenter"
-            reason = "Start with Cluster Autoscaler, migrate to Karpenter in 3-6 months"
-        else:
-            recommendation = "karpenter"
-            reason = "You're ready for it, and benefits outweigh complexity"
-        
-        # Display recommendation
-        if recommendation == "cluster_autoscaler":
-            st.success("### ✅ Recommendation: Cluster Autoscaler")
-            st.markdown(f"**Reason:** {reason}")
-            
-            st.markdown("""
-            **Why Cluster Autoscaler for you:**
-            - ✅ Easier to learn and operate
-            - ✅ Extensive documentation and community support
-            - ✅ Works well with managed node groups
-            - ✅ Predictable behavior
-            - ✅ Lower operational burden
-            
-            **Timeline:**
-            - Week 1: Deploy Cluster Autoscaler
-            - Week 2: Configure scaling policies
-            - Month 2-3: Monitor and tune
-            - Month 6+: Consider Karpenter migration
-            
-            **Setup Guide:** See "Cluster Autoscaler Setup" in Implementation tab
-            """)
-            
-        elif recommendation == "karpenter":
-            st.success("### ✅ Recommendation: Karpenter")
-            st.markdown(f"**Reason:** {reason}")
-            
-            st.markdown("""
-            **Why Karpenter for you:**
-            - ✅ 20-50% better cost optimization
-            - ✅ Sub-minute node provisioning
-            - ✅ Automatic right-sizing
-            - ✅ Better Spot instance support
-            - ✅ No node groups required
-            
-            **Prerequisites:**
-            - ✅ Team comfortable with Kubernetes concepts
-            - ✅ Willingness to invest 2-3 weeks learning
-            - ✅ Monitoring in place (to validate behavior)
-            
-            **Timeline:**
-            - Week 1: Setup and configuration
-            - Week 2-3: Testing and validation
-            - Week 4: Production rollout
-            - Ongoing: Fine-tuning and optimization
-            
-            **Setup Guide:** See "Karpenter Setup" in Implementation tab
-            """)
-            
-        else:  # start_ca_migrate_karpenter
-            st.success("### ✅ Recommendation: Start with Cluster Autoscaler, Migrate to Karpenter")
-            st.markdown(f"**Reason:** {reason}")
-            
-            st.markdown("""
-            **Phased Approach:**
-            
-            **Phase 1 (Months 0-3): Cluster Autoscaler**
-            - Get familiar with autoscaling concepts
-            - Build confidence with production operations
-            - Establish monitoring and alerting
-            - Document scaling patterns
-            
-            **Phase 2 (Months 3-6): Karpenter Preparation**
-            - Team training on Karpenter concepts
-            - Test Karpenter in dev environment
-            - Plan migration strategy
-            - Identify workloads for pilot
-            
-            **Phase 3 (Months 6-9): Karpenter Migration**
-            - Deploy Karpenter alongside CA
-            - Migrate non-critical workloads first
-            - Validate cost savings and behavior
-            - Complete migration, remove CA
-            
-            **Expected Outcome:** Smooth transition with minimal risk
-            """)
-        
-        # Comparison table
-        with st.expander("📊 Detailed Comparison"):
-            st.markdown("""
-            | Feature | Cluster Autoscaler | Karpenter |
-            |---------|-------------------|-----------|
-            | **Provisioning Speed** | 2-5 minutes | 15-30 seconds |
-            | **Right-sizing** | Fixed node groups | Automatic per-pod |
-            | **Spot Support** | Requires separate setup | Native with interruption handling |
-            | **Learning Curve** | Gentle | Steeper |
-            | **Cost Savings** | 10-30% | 20-50% |
-            | **Complexity** | Low | Medium |
-            | **Node Groups Required** | Yes | No |
-            | **Multi-AZ** | Per node group | Automatic |
-            | **Consolidation** | Manual | Automatic |
-            | **AWS Lock-in** | No | Yes |
-            """)
-
-def render_service_mesh_decision():
-    """Decision framework for service mesh"""
-    st.markdown("### 🕸️ Service Mesh Decision Framework")
-    
-    st.markdown("#### Critical Question: Do you even need a service mesh?")
-    
-    microservices_count = st.select_slider(
-        "How many microservices do you have?",
-        options=["1-5", "6-20", "21-50", "51-100", "100+"]
-    )
-    
-    traffic_requirements = st.multiselect(
-        "What advanced traffic management do you need? (Select all)",
-        [
-            "Canary deployments with gradual traffic shifting",
-            "A/B testing with header-based routing",
-            "Circuit breaking and fault injection",
-            "Automatic retry and timeout policies",
-            "Cross-service distributed tracing",
-            "None - basic load balancing is sufficient"
-        ]
-    )
-    
-    security_requirements = st.multiselect(
-        "What security features do you need?",
-        [
-            "Mutual TLS (mTLS) between all services",
-            "Fine-grained authorization policies",
-            "Service-to-service authentication",
-            "Encryption in transit (automatic)",
-            "None - application-level security is sufficient"
-        ]
-    )
-    
-    team_size = st.radio(
-        "What's your platform team size?",
-        [
-            "No dedicated platform team",
-            "1-2 engineers",
-            "3-5 engineers",
-            "6+ engineers with specialized roles"
-        ]
-    )
-    
-    if st.button("Get Service Mesh Recommendation", use_container_width=True):
-        # Decision logic
-        services_numeric = {"1-5": 3, "6-20": 13, "21-50": 35, "51-100": 75, "100+": 150}
-        num_services = services_numeric.get(microservices_count, 10)
-        
-        has_advanced_needs = len([r for r in traffic_requirements if r != "None - basic load balancing is sufficient"]) > 0
-        has_security_needs = len([s for s in security_requirements if s != "None - application-level security is sufficient"]) > 0
-        has_team = team_size in ["3-5 engineers", "6+ engineers with specialized roles"]
-        
-        # Decision tree
-        if num_services < 20:
-            recommendation = "none"
-        elif num_services < 50 and not has_advanced_needs:
-            recommendation = "wait"
-        elif has_advanced_needs and has_security_needs and has_team:
-            recommendation = "istio"
-        elif has_team and num_services > 50:
-            recommendation = "linkerd"
-        elif has_advanced_needs:
-            recommendation = "app_mesh"
-        else:
-            recommendation = "none"
-        
-        # Display recommendations
-        if recommendation == "none":
-            st.success("### ✅ Recommendation: No Service Mesh Needed")
-            st.markdown("""
-            **Why you don't need a service mesh:**
-            - ✅ You have < 20 services (not enough complexity)
-            - ✅ Basic load balancing meets your needs
-            - ✅ Can achieve your goals with simpler tools
-            
-            **What to use instead:**
-            - **Ingress Controller:** AWS Load Balancer Controller or NGINX
-            - **Observability:** Prometheus + Grafana + CloudWatch
-            - **Security:** Network Policies + TLS at ingress
-            - **Traffic Management:** Kubernetes Services + Deployments
-            
-            **When to revisit:**
-            - When you have 50+ microservices
-            - When you need advanced traffic routing (canary, A/B)
-            - When security requirements demand mTLS everywhere
-            
-            **Cost Saved:** $0 overhead (service mesh adds 10-15% resource cost)
-            """)
-            
-        elif recommendation == "wait":
-            st.warning("### ⏳ Recommendation: Wait, You're Not Ready Yet")
-            st.markdown("""
-            **Why wait:**
-            - Your service count doesn't justify the complexity yet
-            - You can achieve your goals with simpler tools
-            - Service mesh adds 10-15% resource overhead
-            - Requires dedicated platform engineering expertise
-            
-            **What to do instead:**
-            1. **Build foundation first:** Get comfortable with basic K8s networking
-            2. **Implement observability:** Prometheus, Grafana, distributed tracing
-            3. **Use simple patterns:** Kubernetes native features
-            4. **Grow gradually:** Revisit when you hit 50+ services
-            
-            **Revisit when:**
-            - You reach 50+ microservices
-            - Multiple teams managing different services
-            - Advanced traffic management becomes critical
-            - Dedicated platform team available (3+ engineers)
-            """)
-            
-        elif recommendation == "istio":
-            st.success("### ✅ Recommendation: Istio Service Mesh")
-            st.markdown("""
-            **Why Istio for you:**
-            - ✅ 50+ microservices justify the investment
-            - ✅ You need advanced traffic management (canary, A/B, circuit breaking)
-            - ✅ Security requirements need mTLS and fine-grained policies
-            - ✅ Platform team can manage the complexity
-            
-            **What you get:**
-            - **Traffic Management:** Advanced routing, retries, timeouts, circuit breaking
-            - **Security:** Automatic mTLS, authorization policies
-            - **Observability:** Distributed tracing, service topology, metrics
-            - **Policy Enforcement:** Rate limiting, quotas
-            
-            **Prerequisites:**
-            - ✅ Platform team (3+ engineers)
-            - ✅ Prometheus + Grafana already deployed
-            - ✅ Team comfortable with Kubernetes networking
-            - ✅ Budget for 10-15% resource overhead
-            
-            **Timeline:**
-            - Week 1-2: Installation and basic configuration
-            - Week 3-4: Pilot with 5-10 services
-            - Week 5-8: Gradual rollout to all services
-            - Month 3-6: Advanced features (canary, A/B testing)
-            
-            **Resource Impact:**
-            - CPU: +10-15% (Envoy sidecars)
-            - Memory: +50-100MB per pod
-            - Latency: +1-2ms per hop
-            
-            **Setup Guide:** See "Istio Service Mesh" in Implementation tab
-            """)
-            
-        elif recommendation == "linkerd":
-            st.success("### ✅ Recommendation: Linkerd Service Mesh")
-            st.markdown("""
-            **Why Linkerd for you:**
-            - ✅ You need a service mesh but want minimal complexity
-            - ✅ Security (mTLS) is priority, advanced routing is secondary
-            - ✅ Want lower resource overhead than Istio
-            - ✅ CNCF graduated project with strong community
-            
-            **What you get:**
-            - **Security:** Automatic mTLS (easiest to configure)
-            - **Observability:** Built-in dashboard, metrics, tracing
-            - **Lightweight:** Rust-based proxy (lower overhead than Istio)
-            - **Simple:** Easier to learn and operate
-            
-            **Comparison to Istio:**
-            - ✅ Simpler: Easier installation and operation
-            - ✅ Lighter: 50% less resource overhead
-            - ✅ Faster: Lower latency impact
-            - ⚠️ Fewer features: Less advanced traffic routing
-            
-            **Timeline:**
-            - Week 1: Installation (easier than Istio)
-            - Week 2: Enable mTLS (automatic)
-            - Week 3-4: Rollout to all services
-            - Month 2+: Observability and optimization
-            
-            **Setup Guide:** See "Linkerd Setup" in Implementation tab
-            """)
-            
-        elif recommendation == "app_mesh":
-            st.success("### ✅ Recommendation: AWS App Mesh")
-            st.markdown("""
-            **Why AWS App Mesh for you:**
-            - ✅ AWS-native solution with deep integration
-            - ✅ Works across EKS, ECS, and EC2
-            - ✅ Managed control plane (less operational burden)
-            - ✅ No additional cost (pay for compute only)
-            
-            **What you get:**
-            - **Native AWS:** Integrates with X-Ray, CloudWatch, IAM
-            - **Managed:** AWS handles control plane updates
-            - **Multi-compute:** Works with EKS, ECS, EC2
-            - **Cost:** No additional service charges
-            
-            **Trade-offs:**
-            - ✅ Simpler than Istio (managed by AWS)
-            - ✅ Good AWS integration
-            - ⚠️ AWS lock-in (less portable)
-            - ⚠️ Fewer features than Istio
-            - ⚠️ Smaller community
-            
-            **Timeline:**
-            - Week 1-2: Setup and configuration
-            - Week 3-4: Pilot with few services
-            - Month 2-3: Full rollout
-            
-            **Setup Guide:** See "AWS App Mesh" in Implementation tab
-            """)
-
-def render_gitops_decision():
-    """Decision framework for GitOps"""
-    st.markdown("### 🔄 GitOps: ArgoCD vs FluxCD vs Manual")
-    
-    st.info("GitOps = Git as single source of truth for infrastructure and applications")
-    
-    team_size = st.radio(
-        "How many people deploy to Kubernetes?",
-        ["Just me (1)", "Small team (2-5)", "Multiple teams (6-15)", "Large organization (15+)"]
-    )
-    
-    deployment_frequency = st.radio(
-        "How often do you deploy?",
-        ["Few times per month", "Weekly", "Multiple times per day"]
-    )
-    
-    multi_cluster = st.radio(
-        "How many clusters do you manage?",
-        ["1 cluster", "2-3 clusters", "4-10 clusters", "10+ clusters"]
-    )
-    
-    if st.button("Get GitOps Recommendation", use_container_width=True):
-        # Simple decision logic
-        if team_size == "Just me (1)" and deployment_frequency == "Few times per month":
-            recommendation = "manual"
-        elif team_size in ["Large organization (15+)"] or multi_cluster in ["4-10 clusters", "10+ clusters"]:
-            recommendation = "argocd"
-        elif deployment_frequency == "Multiple times per day":
-            recommendation = "fluxcd"
-        else:
-            recommendation = "argocd"
-        
-        if recommendation == "manual":
-            st.info("### 💡 Recommendation: Manual Deployments (For Now)")
-            st.markdown("""
-            **Why manual is OK for you:**
-            - You deploy infrequently
-            - Single developer/small team
-            - GitOps adds complexity you don't need yet
-            
-            **What to do:**
-            ```bash
-            # Use kubectl apply
-            kubectl apply -f manifests/
-            
-            # Or Helm
-            helm upgrade --install myapp ./chart
-            ```
-            
-            **Revisit GitOps when:**
-            - Team grows to 5+ people
-            - Deploying multiple times per day
-            - Managing 2+ clusters
-            - Need audit trail of changes
-            """)
-        elif recommendation == "argocd":
-            st.success("### ✅ Recommendation: ArgoCD")
-            st.markdown("""
-            **Why ArgoCD for you:**
-            - ✅ Rich UI for visibility
-            - ✅ Better for multiple clusters
-            - ✅ Strong RBAC for team collaboration
-            - ✅ Application CRDs for complex deployments
-            
-            **Setup Guide:** See "ArgoCD GitOps" in Implementation tab
-            """)
-        else:  # fluxcd
-            st.success("### ✅ Recommendation: FluxCD")
-            st.markdown("""
-            **Why FluxCD for you:**
-            - ✅ Lightweight and simple
-            - ✅ GitOps Toolkit approach
-            - ✅ Great for automation (no UI dependency)
-            - ✅ Native Kubernetes-style CRDs
-            
-            **Setup Guide:** FluxCD installation guide available
-            """)
-
-def render_monitoring_decision():
-    """Monitoring stack decision"""
-    st.info("Monitoring decision framework - Coming in full implementation")
-
-def render_secrets_decision():
-    """Secrets management decision"""
-    st.info("Secrets management decision framework - Coming in full implementation")
-
-def render_ingress_decision():
-    """Ingress controller decision"""
-    st.info("Ingress controller decision framework - Coming in full implementation")
-
-def render_storage_decision():
-    """Storage solution decision"""
-    st.info("Storage solution decision framework - Coming in full implementation")
-
-# ============================================================================
-# INTEGRATED TRANSFORMATION GUIDE
-# ============================================================================
-
-def render_integrated_transformation():
-    """Show how all components work together in a real transformation"""
-    st.markdown("## 🏗️ Integrated Transformation: All Components Working Together")
-    
-    st.markdown("""
-    ### Real-World Scenario
-    
-    Let's walk through a complete transformation showing how all components 
-    integrate and work together.
-    
-    **Company:** E-commerce platform
-    **Current State:** 30 microservices on VMs
-    **Goal:** Migrate to EKS with cost optimization
-    """)
-    
-    # Timeline view
-    phase = st.selectbox(
-        "Select Phase to See Component Integration",
-        [
-            "Phase 1: Foundation (Weeks 1-4)",
-            "Phase 2: Platform Services (Weeks 5-8)",
-            "Phase 3: Application Migration (Weeks 9-16)",
-            "Phase 4: Optimization (Weeks 17-24)"
-        ]
-    )
-    
-    if "Phase 1" in phase:
-        render_phase1_integration()
-    elif "Phase 2" in phase:
-        render_phase2_integration()
-    elif "Phase 3" in phase:
-        render_phase3_integration()
-    else:
-        render_phase4_integration()
-
-def render_phase1_integration():
-    """Phase 1: Foundation - sizing and initial setup"""
-    st.markdown("### Phase 1: Foundation (Weeks 1-4)")
-    
-    st.markdown("#### Week 1-2: Sizing and Architecture")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        **Step 1: Size the Cluster**
-        
-        Using our sizing calculator:
-        - Current: 30 VMs × 4 vCPU × 16 GB
-        - Actual usage: 40% (over-provisioned)
-        - Result: Need 50 vCPU, 100 GB
-        
-        **Decision:** 
-        - 6x m5.xlarge nodes (4 vCPU, 16 GB each)
-        - Total: 24 vCPU, 96 GB
-        - Target: 60-70% utilization
-        """)
-    
-    with col2:
-        st.markdown("""
-        **Step 2: Select Initial Components**
-        
-        Based on decision framework:
-        - ✅ Cluster Autoscaler (team beginner)
-        - ✅ ALB Controller (AWS native)
-        - ✅ Container Insights (start simple)
-        - ❌ Karpenter (wait 3 months)
-        - ❌ Service Mesh (only 30 services)
-        - ❌ Advanced monitoring (overkill)
-        """)
-    
-    st.markdown("#### Week 3-4: Deploy Foundation")
-    
-    with st.expander("📋 Implementation Checklist"):
-        st.markdown("""
-        **Infrastructure:**
-        - [x] VPC with 3 AZs
-        - [x] EKS cluster with 6 nodes
-        - [x] Cluster Autoscaler installed
-        - [x] ALB Controller installed
-        - [x] Container Insights enabled
-        
-        **Results:**
-        - Cluster operational
-        - Basic monitoring in place
-        - Ready for applications
-        
-        **Cost:** $420/month (baseline)
-        """)
-
-def render_phase2_integration():
-    """Phase 2: Platform services"""
-    st.markdown("### Phase 2: Platform Services (Weeks 5-8)")
-    
-    st.markdown("""
-    **Adding operational capabilities before applications**
-    
-    Components added:
-    1. **ArgoCD** - For GitOps deployments
-    2. **External Secrets Operator** - Integrates with AWS Secrets Manager
-    3. **Cert-manager** - Automatic TLS certificates
-    4. **Kyverno** - Policy enforcement
-    """)
-    
-    st.markdown("#### How They Work Together:")
-    
-    st.code("""
-# 1. ArgoCD watches Git repo for changes
-# 2. External Secrets syncs from AWS Secrets Manager
-# 3. Cert-manager gets TLS cert from Let's Encrypt
-# 4. Kyverno ensures all pods have resource limits
-
-# Application deployment flow:
-Developer pushes code → Git
-  ↓
-ArgoCD detects change
-  ↓
-Creates Deployment + Service + Ingress
-  ↓
-External Secrets creates Secret from AWS
-  ↓
-Cert-manager provisions TLS certificate
-  ↓
-Kyverno validates policies
-  ↓
-ALB Controller creates Load Balancer
-  ↓
-Application accessible with HTTPS
-    """, language="text")
-    
-    with st.expander("🔗 Component Integration Example"):
         st.code("""
-# ArgoCD Application
+# Create Karpenter controller policy
+cat <<EOF > karpenter-controller-policy.json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "Karpenter",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:CreateFleet",
+                "ec2:CreateLaunchTemplate",
+                "ec2:CreateTags",
+                "ec2:DeleteLaunchTemplate",
+                "ec2:DescribeAvailabilityZones",
+                "ec2:DescribeImages",
+                "ec2:DescribeInstances",
+                "ec2:DescribeInstanceTypeOfferings",
+                "ec2:DescribeInstanceTypes",
+                "ec2:DescribeLaunchTemplates",
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeSpotPriceHistory",
+                "ec2:DescribeSubnets",
+                "ec2:RunInstances",
+                "ec2:TerminateInstances",
+                "iam:PassRole",
+                "pricing:GetProducts",
+                "ssm:GetParameter"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+EOF
+
+# Create IAM role with IRSA
+eksctl create iamserviceaccount \\
+    --cluster=<cluster-name> \\
+    --namespace=karpenter \\
+    --name=karpenter \\
+    --attach-policy-arn=arn:aws:iam::<account>:policy/KarpenterController \\
+    --approve
+        """, language="bash")
+
+def render_argocd_guide():
+    """ArgoCD implementation guide"""
+    st.markdown("## 🔄 ArgoCD GitOps Setup Guide")
+    
+    st.markdown("""
+    ### Overview
+    ArgoCD is a declarative GitOps continuous delivery tool for Kubernetes.
+    """)
+    
+    with st.expander("🚀 Quick Start", expanded=True):
+        st.code("""
+# Install ArgoCD
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+# Get initial admin password
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+
+# Access UI (port-forward)
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+        """, language="bash")
+    
+    with st.expander("📋 Create Application"):
+        st.code("""
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
+  name: my-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/your-repo
+    targetRevision: HEAD
+    path: kubernetes/
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: my-app
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+        """, language="yaml")
+    
+    with st.expander("🔐 Configure Git Repository"):
+        st.markdown("""
+        **Add a Git repository to ArgoCD:**
+        
+        1. Go to Settings > Repositories
+        2. Click "+ Connect Repo"
+        3. Choose connection method (HTTPS or SSH)
+        4. Enter repository URL
+        5. Add credentials if private repository
+        6. Click "Connect"
+        """)
+    
+    with st.expander("📊 Monitor Applications"):
+        st.markdown("""
+        **View application status:**
+        
+        - Access ArgoCD UI at http://localhost:8080
+        - Default credentials: admin / [password from earlier step]
+        - View sync status, health status, and resource tree
+        - Click on resources to see details and logs
+        - Use CLI for automation: `argocd app list`
+        """)
+
+def render_multi_az_guide():
+    """Multi-AZ HA setup guide"""
+    st.markdown("## 🏢 Multi-AZ High Availability Setup")
+    
+    st.markdown("""
+    ### Overview
+    Configure EKS for high availability across multiple Availability Zones (AZs) 
+    to achieve 99.99% uptime and survive AZ failures.
+    
+    ### Architecture Goal
+    - EKS control plane: Managed across 3 AZs by AWS
+    - Node groups: One per AZ for balanced distribution
+    - Storage: Multi-AZ persistent storage (EFS)
+    - Networking: NAT Gateway per AZ for redundancy
+    """)
+    
+    with st.expander("🏗️ Step 1: VPC Configuration", expanded=True):
+        st.markdown("**Create VPC with 3 AZs:**")
+        st.code("""
+# Create VPC with public and private subnets in 3 AZs
+aws ec2 create-vpc --cidr-block 10.0.0.0/16 --tag-specifications 'ResourceType=vpc,Tags=[{Key=Name,Value=eks-vpc}]'
+
+# Create subnets in each AZ
+# Public subnets (for load balancers)
+aws ec2 create-subnet --vpc-id <vpc-id> --cidr-block 10.0.1.0/24 --availability-zone us-east-1a --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=public-1a}]'
+aws ec2 create-subnet --vpc-id <vpc-id> --cidr-block 10.0.2.0/24 --availability-zone us-east-1b --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=public-1b}]'
+aws ec2 create-subnet --vpc-id <vpc-id> --cidr-block 10.0.3.0/24 --availability-zone us-east-1c --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=public-1c}]'
+
+# Private subnets (for EKS nodes)
+aws ec2 create-subnet --vpc-id <vpc-id> --cidr-block 10.0.101.0/24 --availability-zone us-east-1a --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=private-1a}]'
+aws ec2 create-subnet --vpc-id <vpc-id> --cidr-block 10.0.102.0/24 --availability-zone us-east-1b --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=private-1b}]'
+aws ec2 create-subnet --vpc-id <vpc-id> --cidr-block 10.0.103.0/24 --availability-zone us-east-1c --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=private-1c}]'
+        """, language="bash")
+    
+    with st.expander("🎯 Step 2: Create EKS Cluster"):
+        st.markdown("**Deploy EKS cluster with eksctl:**")
+        st.code("""
+# Create cluster configuration
+cat << EOF > eks-cluster.yaml
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: production-cluster
+  region: us-east-1
+  version: "1.28"
+
+vpc:
+  subnets:
+    private:
+      us-east-1a: { id: subnet-xxx }
+      us-east-1b: { id: subnet-yyy }
+      us-east-1c: { id: subnet-zzz }
+
+managedNodeGroups:
+  - name: ng-1a
+    instanceType: m5.large
+    minSize: 2
+    maxSize: 10
+    availabilityZones: ["us-east-1a"]
+    labels:
+      topology.kubernetes.io/zone: us-east-1a
+    tags:
+      k8s.io/cluster-autoscaler/enabled: "true"
+  
+  - name: ng-1b
+    instanceType: m5.large
+    minSize: 2
+    maxSize: 10
+    availabilityZones: ["us-east-1b"]
+    labels:
+      topology.kubernetes.io/zone: us-east-1b
+    tags:
+      k8s.io/cluster-autoscaler/enabled: "true"
+  
+  - name: ng-1c
+    instanceType: m5.large
+    minSize: 2
+    maxSize: 10
+    availabilityZones: ["us-east-1c"]
+    labels:
+      topology.kubernetes.io/zone: us-east-1c
+    tags:
+      k8s.io/cluster-autoscaler/enabled: "true"
+EOF
+
+# Create cluster
+eksctl create cluster -f eks-cluster.yaml
+        """, language="bash")
+    
+    with st.expander("🛡️ Step 3: Configure Pod Distribution"):
+        st.markdown("**Ensure pods spread across AZs:**")
+        st.code("""
+apiVersion: apps/v1
+kind: Deployment
+metadata:
   name: web-app
 spec:
-  source:
-    repoURL: https://github.com/company/app
-    path: kubernetes/
-
+  replicas: 6
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      # Anti-affinity: Don't schedule multiple pods on same node
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - web
+              topologyKey: kubernetes.io/hostname
+      
+      # Topology spread: Balance across AZs
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: web
+      
+      containers:
+      - name: web
+        image: nginx:latest
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        """, language="yaml")
+    
+    with st.expander("📊 Step 4: Pod Disruption Budgets"):
+        st.markdown("**Protect critical workloads during maintenance:**")
+        st.code("""
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-app-pdb
+spec:
+  minAvailable: 4  # At least 4 pods must remain available
+  selector:
+    matchLabels:
+      app: web
 ---
-# Deployment with External Secrets
+# Alternative: Use percentage
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-pdb
+spec:
+  maxUnavailable: 25%  # Max 25% of pods can be unavailable
+  selector:
+    matchLabels:
+      app: api
+        """, language="yaml")
+    
+    with st.expander("✅ Step 5: Validation & Testing"):
+        st.markdown("""
+        **Validate HA Configuration:**
+        
+        1. **Check pod distribution:**
+        ```bash
+        kubectl get pods -o wide | awk '{print $1, $7}' | sort -k2
+        ```
+        
+        2. **Simulate AZ failure:**
+        ```bash
+        # Cordon all nodes in one AZ
+        kubectl cordon <node-in-az-a>
+        
+        # Watch pods reschedule
+        kubectl get pods -w
+        
+        # Verify application still accessible
+        curl https://your-app.example.com
+        ```
+        
+        3. **Test during node upgrades:**
+        ```bash
+        # Upgrade nodes one AZ at a time
+        eksctl upgrade nodegroup --cluster=production-cluster --name=ng-1a
+        ```
+        
+        4. **Monitor availability:**
+        ```bash
+        # Check if PDBs are preventing disruptions
+        kubectl get pdb
+        kubectl describe pdb web-app-pdb
+        ```
+        """)
+    
+    st.success("✅ **Result:** Your cluster can survive AZ failures with zero downtime!")
+
+def render_spot_strategy_guide():
+    """Spot instance strategy guide"""
+    st.markdown("## 💰 Spot Instance Strategy for EKS")
+    
+    st.markdown("""
+    ### Overview
+    Reduce compute costs by 60-90% using EC2 Spot Instances with intelligent 
+    diversification and interruption handling.
+    
+    ### Strategy
+    - **Mix:** 10-20% On-Demand (critical) + 80-90% Spot (workloads)
+    - **Diversification:** 10+ instance types across 3 AZs
+    - **Automation:** Karpenter for intelligent provisioning
+    """)
+    
+    with st.expander("📊 Step 1: Analyze Workload Suitability", expanded=True):
+        st.markdown("""
+        **Categorize your workloads:**
+        
+        | Workload Type | Spot Suitability | Strategy |
+        |---------------|------------------|----------|
+        | Stateless web apps | ✅ High | 70-90% Spot |
+        | Batch processing | ✅ High | 100% Spot |
+        | CI/CD pipelines | ✅ High | 100% Spot |
+        | Databases | ⚠️ Medium | On-Demand only |
+        | Auth services | ❌ Low | On-Demand only |
+        | Monitoring | ❌ Low | On-Demand only |
+        
+        **Use this command to analyze current capacity:**
+        """)
+        st.code("""
+# Get current node types and counts
+kubectl get nodes -o json | jq '.items[] | {name: .metadata.name, type: .metadata.labels["node.kubernetes.io/instance-type"], zone: .metadata.labels["topology.kubernetes.io/zone"]}'
+
+# Get pod counts per node
+kubectl get pods --all-namespaces -o wide | awk '{print $8}' | sort | uniq -c
+        """, language="bash")
+    
+    with st.expander("🎯 Step 2: Install Karpenter"):
+        st.markdown("**Karpenter handles Spot diversification automatically:**")
+        st.code("""
+# Install Karpenter
+export CLUSTER_NAME=your-cluster
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+helm repo add karpenter https://charts.karpenter.sh
+helm repo update
+
+helm install karpenter karpenter/karpenter \\
+  --namespace karpenter \\
+  --create-namespace \\
+  --set serviceAccount.annotations."eks\\.amazonaws\\.com/role-arn"=arn:aws:iam::${AWS_ACCOUNT_ID}:role/KarpenterController \\
+  --set settings.clusterName=${CLUSTER_NAME} \\
+  --set settings.clusterEndpoint=$(aws eks describe-cluster --name ${CLUSTER_NAME} --query "cluster.endpoint" --output text) \\
+  --wait
+        """, language="bash")
+    
+    with st.expander("⚙️ Step 3: Configure Spot-Heavy NodePool"):
+        st.markdown("**Create Karpenter provisioner with Spot focus:**")
+        st.code("""
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: spot-optimized
+spec:
+  template:
+    spec:
+      requirements:
+        # Prefer Spot, fallback to On-Demand if needed
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"]
+        
+        # Support both x86 and ARM for maximum availability
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64", "arm64"]
+        
+        # Multiple instance families for diversification
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: ["c", "m", "r"]  # Compute, General, Memory
+        
+        # Modern generations only (5+)
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: ["5"]
+        
+        # Size range
+        - key: karpenter.k8s.aws/instance-size
+          operator: In
+          values: ["large", "xlarge", "2xlarge"]
+      
+      nodeClassRef:
+        name: default
+  
+  # Cost-saving features
+  disruption:
+    consolidationPolicy: WhenUnderutilized
+    consolidateAfter: 30s
+  
+  # Set limits
+  limits:
+    cpu: 1000
+    memory: 1000Gi
+  
+  # Prioritize Spot
+  weight: 10
+---
+apiVersion: karpenter.k8s.aws/v1beta1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  amiFamily: AL2
+  role: KarpenterNodeRole
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: ${CLUSTER_NAME}
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: ${CLUSTER_NAME}
+  
+  # Configure Spot interruption handling
+  instanceStorePolicy: RAID0
+        """, language="yaml")
+    
+    with st.expander("🛡️ Step 4: Handle Spot Interruptions"):
+        st.markdown("**Set up graceful termination:**")
+        st.code("""
+# 1. Configure graceful shutdown in your deployments
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -1311,286 +1653,281 @@ metadata:
 spec:
   template:
     spec:
+      terminationGracePeriodSeconds: 120  # Give time to finish requests
       containers:
       - name: app
-        envFrom:
-        - secretRef:
-            name: app-secrets  # Synced from AWS by External Secrets
----
-# External Secret definition
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: app-secrets
-spec:
-  secretStoreRef:
-    name: aws-secrets-manager
-  target:
-    name: app-secrets
-  data:
-  - secretKey: DATABASE_URL
-    remoteRef:
-      key: prod/database/url
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]  # Wait for deregistration
+        
+        # Readiness probe to stop receiving traffic
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 3
 
 ---
-# Ingress with automatic TLS
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: web-app
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod  # Cert-manager handles this
-    alb.ingress.kubernetes.io/scheme: internet-facing
-spec:
-  tls:
-  - hosts:
-    - app.example.com
-    secretName: app-tls  # Created automatically by cert-manager
-  rules:
-  - host: app.example.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: web-app
-            port:
-              number: 80
+# 2. Use AWS Node Termination Handler (for 2-minute warnings)
+kubectl apply -f https://github.com/aws/aws-node-termination-handler/releases/download/v1.19.0/all-resources.yaml
         """, language="yaml")
+    
+    with st.expander("📈 Step 5: Monitor Spot Savings"):
+        st.markdown("""
+        **Track your savings:**
+        
+        1. **Check Spot interruption rates:**
+        ```bash
+        # View interruption events
+        kubectl get events --all-namespaces | grep -i spot
+        
+        # Check node ages (short ages = more interruptions)
+        kubectl get nodes -o custom-columns=NAME:.metadata.name,AGE:.metadata.creationTimestamp
+        ```
+        
+        2. **Calculate savings:**
+        ```bash
+        # Compare Spot vs On-Demand costs
+        # Spot: ~$0.03/hr for c5.large
+        # On-Demand: ~$0.085/hr for c5.large
+        # Savings: 65%
+        ```
+        
+        3. **Use Kubecost for detailed tracking:**
+        ```bash
+        helm install kubecost kubecost/cost-analyzer \\
+          --namespace kubecost --create-namespace
+        
+        # Access at: http://localhost:9090
+        kubectl port-forward -n kubecost svc/kubecost-cost-analyzer 9090:9090
+        ```
+        """)
+    
+    st.success("✅ **Expected Savings:** 60-90% reduction in compute costs!")
+    
+    st.info("""
+    **💡 Pro Tips:**
+    - Start with 50% Spot, gradually increase to 80-90%
+    - Always keep critical services (auth, monitoring) on On-Demand
+    - Use AWS Spot Instance Advisor to check interruption rates
+    - Test interruptions in dev before production: `kubectl drain <node>`
+    """)
 
-def render_phase3_integration():
-    """Phase 3: Application migration"""
-    st.markdown("### Phase 3: Application Migration (Weeks 9-16)")
+def render_istio_guide():
+    """Istio service mesh guide"""
+    st.markdown("## 🕸️ Istio Service Mesh Implementation")
     
     st.markdown("""
-    **Migrating 30 microservices in 3 waves**
+    ### Overview
+    Implement Istio for advanced traffic management, security, and observability 
+    in microservices architectures.
     
-    Now all components work together to enable smooth migration
+    ### When to Use Istio
+    ✅ **Good fit:**
+    - 50+ microservices
+    - Need advanced traffic routing (canary, A/B testing)
+    - Strong security requirements (mTLS)
+    - Multiple teams managing services
+    
+    ⚠️ **Not recommended for:**
+    - Small applications (< 10 services)
+    - Teams without Kubernetes experience
+    - Cost-sensitive environments (10-15% overhead)
     """)
     
-    tab1, tab2, tab3 = st.tabs(["Wave 1: Quick Wins", "Wave 2: Core Services", "Wave 3: Complex Apps"])
-    
-    with tab1:
-        st.markdown("""
-        **Week 9-10: 10 Simple Services**
-        
-        Services: Static sites, simple APIs, background jobs
-        
-        **Component Usage:**
-        - ✅ ArgoCD: Automated deployment from Git
-        - ✅ Cluster Autoscaler: Adds nodes as needed
-        - ✅ ALB Controller: Creates load balancers
-        - ✅ Container Insights: Basic monitoring
-        
-        **Process:**
-        1. Containerize application
-        2. Create K8s manifests in Git
-        3. Define ArgoCD Application
-        4. ArgoCD deploys automatically
-        5. Monitor in Container Insights
-        
-        **Outcome:**
-        - 10 services migrated
-        - Team confidence building
-        - Patterns established
-        """)
-    
-    with tab2:
-        st.markdown("""
-        **Week 11-14: 15 Core Services**
-        
-        Services: Main APIs, web frontends, user-facing services
-        
-        **Component Usage:**
-        - ✅ All previous components
-        - ✅ External Secrets: Database credentials
-        - ✅ Cert-manager: TLS for all services
-        - ✅ Kyverno: Enforce security policies
-        
-        **New Complexity:**
-        - Inter-service communication
-        - Shared databases
-        - Caching layers
-        - Background workers
-        
-        **Process:**
-        1. Migrate services by domain/team
-        2. Test inter-service communication
-        3. Validate performance
-        4. Cutover with blue-green
-        
-        **Outcome:**
-        - 25/30 services on EKS
-        - Production traffic flowing
-        - Monitoring and alerting working
-        """)
-    
-    with tab3:
-        st.markdown("""
-        **Week 15-16: 5 Complex Services**
-        
-        Services: Payment processing, order management, inventory
-        
-        **Component Usage:**
-        - ✅ All components at full capacity
-        - ✅ PodDisruptionBudgets for critical services
-        - ✅ Advanced monitoring and alerting
-        - ✅ Disaster recovery procedures
-        
-        **Extra Care:**
-        - Extensive testing in staging
-        - Gradual rollout with canary
-        - Rollback procedures ready
-        - 24/7 monitoring during cutover
-        
-        **Outcome:**
-        - ✅ All 30 services migrated
-        - ✅ Old VMs decommissioned
-        - ✅ Cost reduced by 25%
-        """)
-
-def render_phase4_integration():
-    """Phase 4: Optimization"""
-    st.markdown("### Phase 4: Optimization (Weeks 17-24)")
-    
-    st.markdown("""
-    **Adding advanced components for cost optimization and scale**
-    
-    Now that foundation is solid, add Karpenter and optimize
-    """)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("""
-        **Week 17-18: Deploy Karpenter**
-        
-        **Why now:**
-        - ✅ Team experienced with K8s
-        - ✅ Workload patterns understood
-        - ✅ Monitoring in place to validate
-        
-        **Process:**
-        1. Install Karpenter alongside Cluster Autoscaler
-        2. Configure for Spot instances (60%)
-        3. Test with non-critical services
-        4. Migrate critical services
-        5. Remove Cluster Autoscaler
-        
-        **Result:** 40% cost reduction
-        """)
-    
-    with col2:
-        st.markdown("""
-        **Week 19-24: Continuous Optimization**
-        
-        **Activities:**
-        - Right-size based on actual usage
-        - Implement advanced HPA rules
-        - Add VPA for automatic tuning
-        - Optimize Spot instance strategy
-        - Implement pod priority classes
-        
-        **Monitoring:**
-        - Daily cost reviews
-        - Weekly capacity planning
-        - Monthly architecture reviews
-        
-        **Result:** 60% total cost reduction
-        """)
-    
-    st.markdown("---")
-    st.markdown("### 📊 Final Architecture - All Components Together")
-    
-    with st.expander("🏗️ View Complete Architecture Diagram"):
+    with st.expander("🚀 Step 1: Install Istio", expanded=True):
+        st.markdown("**Install using istioctl:**")
         st.code("""
-┌─────────────────────────────────────────────────────┐
-│                    USERS                            │
-└───────────────────┬─────────────────────────────────┘
-                    │
-                    ↓
-┌─────────────────────────────────────────────────────┐
-│              ALB (AWS Load Balancer)                │
-│  • Created by ALB Controller                        │
-│  • TLS termination (cert from cert-manager)         │
-└───────────────────┬─────────────────────────────────┘
-                    │
-                    ↓
-┌─────────────────────────────────────────────────────┐
-│               EKS CLUSTER                           │
-│                                                     │
-│  ┌──────────────────────────────────────────────┐  │
-│  │  CONTROL PLANE (AWS Managed)                 │  │
-│  │  • ArgoCD (GitOps automation)                │  │
-│  │  • Karpenter (intelligent autoscaling)       │  │
-│  │  • Kyverno (policy enforcement)              │  │
-│  └──────────────────────────────────────────────┘  │
-│                                                     │
-│  ┌──────────────────────────────────────────────┐  │
-│  │  WORKER NODES                                │  │
-│  │                                              │  │
-│  │  On-Demand (40%):                           │  │
-│  │  • Critical services (payment, auth)        │  │
-│  │  • Databases                                │  │
-│  │  • Monitoring                               │  │
-│  │                                              │  │
-│  │  Spot (60%) - Managed by Karpenter:        │  │
-│  │  • Web frontends                            │  │
-│  │  • APIs                                     │  │
-│  │  • Background workers                       │  │
-│  │  • Batch jobs                               │  │
-│  │                                              │  │
-│  │  All pods have:                             │  │
-│  │  • Resource requests/limits (enforced)      │  │
-│  │  • Secrets from AWS (External Secrets)     │  │
-│  │  • TLS certificates (cert-manager)          │  │
-│  │  • Monitored (Container Insights)           │  │
-│  └──────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
-                    │
-                    ↓
-┌─────────────────────────────────────────────────────┐
-│            AWS SERVICES                             │
-│  • Secrets Manager (secrets)                        │
-│  • Certificate Manager (TLS)                        │
-│  • CloudWatch (logs & metrics)                      │
-│  • S3 (backups & artifacts)                         │
-│  • RDS (databases)                                  │
-└─────────────────────────────────────────────────────┘
+# Download Istio
+curl -L https://istio.io/downloadIstio | sh -
+cd istio-*
+export PATH=$PWD/bin:$PATH
 
-Component Interactions:
-1. Developer pushes to Git
-2. ArgoCD deploys to cluster
-3. Karpenter provisions right-sized nodes
-4. External Secrets syncs from AWS
-5. Cert-manager handles TLS
-6. ALB Controller creates load balancer
-7. Kyverno enforces policies
-8. Container Insights monitors everything
-9. Spot instances reduce cost by 60%
+# Install with demo profile (for learning)
+istioctl install --set profile=demo -y
 
-Result: Production-ready, cost-optimized, automated platform
-        """, language="text")
+# Or production profile (for real deployments)
+istioctl install --set profile=production -y
+
+# Verify installation
+kubectl get pods -n istio-system
+        """, language="bash")
     
-    st.success("""
-    ### ✅ Transformation Complete!
+    with st.expander("🏷️ Step 2: Enable Sidecar Injection"):
+        st.markdown("**Label namespaces for automatic injection:**")
+        st.code("""
+# Enable injection for a namespace
+kubectl label namespace default istio-injection=enabled
+
+# Verify label
+kubectl get namespace -L istio-injection
+
+# Restart existing pods to inject sidecars
+kubectl rollout restart deployment -n default
+
+# Check if sidecars are injected
+kubectl get pods -n default -o jsonpath='{range .items[*]}{.metadata.name}{"\\t"}{.spec.containers[*].name}{"\\n"}{end}'
+        """, language="bash")
     
-    **Outcomes:**
-    - ✅ All 30 microservices on EKS
-    - ✅ 60% cost reduction
-    - ✅ 99.9% availability
-    - ✅ Automated deployments (GitOps)
-    - ✅ Security hardened
-    - ✅ Team trained and confident
+    with st.expander("🔐 Step 3: Configure mTLS"):
+        st.markdown("**Enable mutual TLS between services:**")
+        st.code("""
+# Start with permissive mode (allows both mTLS and plain text)
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: PERMISSIVE
+---
+# After testing, switch to strict mode
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: STRICT
+
+# Verify mTLS is working
+istioctl authn tls-check <pod-name>.<namespace> <service-name>.<namespace>.svc.cluster.local
+        """, language="yaml")
     
-    **Timeline:** 24 weeks (6 months)
-    **Investment:** $420/month → $168/month (with optimizations)
+    with st.expander("🚦 Step 4: Traffic Management - Canary Deployment"):
+        st.markdown("**Gradually shift traffic to new version:**")
+        st.code("""
+# Define VirtualService for canary routing
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+  - reviews
+  http:
+  - match:
+    - headers:
+        user-agent:
+          regex: ".*Chrome.*"  # Chrome users get v2
+    route:
+    - destination:
+        host: reviews
+        subset: v2
+  - route:  # Everyone else
+    - destination:
+        host: reviews
+        subset: v1
+      weight: 90  # 90% to v1
+    - destination:
+        host: reviews
+        subset: v2
+      weight: 10  # 10% to v2
+---
+# Define DestinationRule with subsets
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: reviews
+spec:
+  host: reviews
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2
+        """, language="yaml")
+    
+    with st.expander("📊 Step 5: Observability with Kiali"):
+        st.markdown("**Install and access Kiali dashboard:**")
+        st.code("""
+# Install Kiali, Prometheus, Grafana, Jaeger
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/kiali.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/prometheus.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/grafana.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/jaeger.yaml
+
+# Wait for pods to be ready
+kubectl rollout status deployment/kiali -n istio-system
+
+# Access Kiali
+kubectl port-forward svc/kiali -n istio-system 20001:20001
+
+# Open browser: http://localhost:20001
+        """, language="bash")
+    
+    with st.expander("🔍 Step 6: Circuit Breaking"):
+        st.markdown("**Prevent cascading failures:**")
+        st.code("""
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: httpbin
+spec:
+  host: httpbin
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 50
+        http2MaxRequests: 100
+        maxRequestsPerConnection: 2
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+        """, language="yaml")
+    
+    with st.expander("✅ Step 7: Testing & Validation"):
+        st.markdown("""
+        **Verify Istio is working:**
+        
+        1. **Check service mesh status:**
+        ```bash
+        istioctl analyze
+        istioctl proxy-status
+        ```
+        
+        2. **Generate test traffic:**
+        ```bash
+        # Deploy sample app
+        kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/bookinfo/platform/kube/bookinfo.yaml
+        
+        # Access it
+        kubectl port-forward svc/productpage 9080:9080
+        ```
+        
+        3. **View in Kiali:**
+        - Open Kiali dashboard
+        - Go to Graph → Select namespace
+        - Generate traffic and watch service graph
+        - Check traffic distribution for canary
+        
+        4. **Check mTLS:**
+        ```bash
+        istioctl authn tls-check productpage-v1-xxx.default reviews.default.svc.cluster.local
+        ```
+        """)
+    
+    st.warning("""
+    **⚠️ Resource Impact:**
+    - CPU: +10-15% per pod (Envoy sidecar)
+    - Memory: +50-100MB per pod
+    - Latency: +1-2ms per hop
+    
+    **Budget accordingly:** Add 20% capacity buffer
     """)
+    
+    st.success("✅ **You now have a production-grade service mesh!**")
 
 # Export
-__all__ = [
-    'render_eks_sizing_calculator',
-    'render_component_selection_guide',
-    'render_integrated_transformation'
-]
+__all__ = ['render_eks_modernization_tab']

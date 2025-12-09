@@ -2,8 +2,7 @@
 AWS Well-Architected Framework Advisor - Enterprise Edition
 AI-Powered Architecture Review & Risk Assessment Platform
 
-Version: 2.0.0
-Author: Enterprise Cloud Architecture Team
+Version: 2.1.0
 """
 
 import streamlit as st
@@ -12,7 +11,6 @@ import base64
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List, Any, Tuple
 import os
-import hashlib
 
 # ============================================================================
 # PAGE CONFIGURATION
@@ -22,19 +20,7 @@ st.set_page_config(
     page_title="AWS Well-Architected Advisor | Enterprise",
     page_icon="🏗️",
     layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': 'https://docs.aws.amazon.com/wellarchitected/',
-        'Report a bug': None,
-        'About': """
-        ## AWS Well-Architected Framework Advisor
-        **Enterprise Edition v2.0.0**
-        
-        AI-Powered Architecture Review Platform
-        
-        Built with Claude AI by Anthropic
-        """
-    }
+    initial_sidebar_state="expanded"
 )
 
 # ============================================================================
@@ -43,7 +29,6 @@ st.set_page_config(
 
 MODULE_STATUS = {}
 MODULE_ERRORS = {}
-IMPORT_WARNINGS = []
 
 # Core libraries
 try:
@@ -52,7 +37,6 @@ try:
 except ImportError as e:
     ANTHROPIC_AVAILABLE = False
     MODULE_ERRORS['anthropic'] = str(e)
-    IMPORT_WARNINGS.append("AI analysis features disabled - install anthropic package")
 
 try:
     import boto3
@@ -62,7 +46,6 @@ try:
 except ImportError as e:
     BOTO3_AVAILABLE = False
     MODULE_ERRORS['boto3'] = str(e)
-    IMPORT_WARNINGS.append("AWS connectivity disabled - install boto3 package")
 
 try:
     import pandas as pd
@@ -134,13 +117,19 @@ except Exception as e:
     MODULE_STATUS['PDF Reports'] = False
     MODULE_ERRORS['pdf_report_generator'] = str(e)
 
+try:
+    from architecture_patterns import render_architecture_patterns_tab
+    MODULE_STATUS['Architecture Patterns'] = True
+except Exception as e:
+    MODULE_STATUS['Architecture Patterns'] = False
+    MODULE_ERRORS['architecture_patterns'] = str(e)
+
 # ============================================================================
-# ENTERPRISE STYLES
+# STYLES
 # ============================================================================
 
 st.markdown("""
 <style>
-    /* Main Header */
     .main-header {
         background: linear-gradient(135deg, #232F3E 0%, #37475A 100%);
         padding: 1.5rem 2rem;
@@ -148,20 +137,8 @@ st.markdown("""
         margin-bottom: 1.5rem;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    .main-header h1 { 
-        color: #FF9900; 
-        margin: 0; 
-        font-size: 1.8rem;
-        font-weight: 700;
-    }
-    .main-header p { 
-        color: #FFFFFF; 
-        margin: 0.3rem 0 0 0; 
-        opacity: 0.9;
-        font-size: 0.95rem;
-    }
-    
-    /* Metric Cards */
+    .main-header h1 { color: #FF9900; margin: 0; font-size: 1.8rem; font-weight: 700; }
+    .main-header p { color: #FFFFFF; margin: 0.3rem 0 0 0; opacity: 0.9; }
     .metric-card {
         background: white;
         border-radius: 10px;
@@ -169,25 +146,9 @@ st.markdown("""
         text-align: center;
         box-shadow: 0 2px 4px rgba(0,0,0,0.08);
         border: 1px solid #e0e0e0;
-        transition: transform 0.2s, box-shadow 0.2s;
     }
-    .metric-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.12);
-    }
-    .metric-value { 
-        font-size: 2.2rem; 
-        font-weight: 700; 
-        color: #232F3E;
-        line-height: 1.2;
-    }
-    .metric-label { 
-        color: #666; 
-        font-size: 0.85rem;
-        margin-top: 0.3rem;
-    }
-    
-    /* Dashboard Cards */
+    .metric-value { font-size: 2.2rem; font-weight: 700; color: #232F3E; }
+    .metric-label { color: #666; font-size: 0.85rem; margin-top: 0.3rem; }
     .dashboard-card {
         background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
         border-radius: 12px;
@@ -196,45 +157,19 @@ st.markdown("""
         border-left: 4px solid #FF9900;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
-    .dashboard-card h3 {
-        color: #232F3E;
-        margin: 0 0 1rem 0;
-        font-size: 1.1rem;
-    }
-    
-    /* Pillar Cards */
     .pillar-card {
         background: white;
         border-radius: 8px;
         padding: 1rem;
         text-align: center;
         border: 1px solid #e0e0e0;
-        transition: all 0.2s;
     }
-    .pillar-card:hover {
-        border-color: #FF9900;
-        box-shadow: 0 2px 8px rgba(255,153,0,0.2);
-    }
-    
-    /* Status Badges */
-    .status-badge {
-        display: inline-block;
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 600;
-    }
-    .status-success { background: #E8F5E9; color: #2E7D32; }
-    .status-warning { background: #FFF3E0; color: #E65100; }
-    .status-danger { background: #FFEBEE; color: #C62828; }
-    
-    /* Finding Cards */
     .finding-critical { border-left: 4px solid #D32F2F; }
     .finding-high { border-left: 4px solid #F57C00; }
     .finding-medium { border-left: 4px solid #FBC02D; }
     .finding-low { border-left: 4px solid #388E3C; }
-    
-    /* Footer */
+    .status-connected { background: #E8F5E9; color: #2E7D32; padding: 0.5rem 1rem; border-radius: 8px; }
+    .status-pending { background: #FFF3E0; color: #E65100; padding: 0.5rem 1rem; border-radius: 8px; }
     .app-footer {
         text-align: center;
         padding: 1rem;
@@ -247,81 +182,121 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ============================================================================
-# WAF PILLARS CONFIGURATION
+# WAF PILLARS
 # ============================================================================
 
 WAF_PILLARS = {
-    "security": {
-        "name": "Security",
-        "icon": "🔒",
-        "color": "#D32F2F",
-        "weight": 1.5,
-        "description": "Protect information, systems, and assets through risk assessments and mitigation strategies",
-        "focus_areas": ["Identity and access management", "Detection controls", "Infrastructure protection", "Data protection", "Incident response"]
-    },
-    "reliability": {
-        "name": "Reliability",
-        "icon": "🛡️",
-        "color": "#1976D2",
-        "weight": 1.3,
-        "description": "Ensure workloads perform their intended functions correctly and consistently",
-        "focus_areas": ["Foundations", "Workload architecture", "Change management", "Failure management"]
-    },
-    "performance": {
-        "name": "Performance Efficiency",
-        "icon": "⚡",
-        "color": "#7B1FA2",
-        "weight": 1.0,
-        "description": "Use computing resources efficiently to meet requirements",
-        "focus_areas": ["Selection", "Review", "Monitoring", "Tradeoffs"]
-    },
-    "cost": {
-        "name": "Cost Optimization",
-        "icon": "💰",
-        "color": "#388E3C",
-        "weight": 1.0,
-        "description": "Avoid unnecessary costs and optimize spending",
-        "focus_areas": ["Practice cloud financial management", "Expenditure awareness", "Cost-effective resources", "Optimize over time"]
-    },
-    "operational_excellence": {
-        "name": "Operational Excellence",
-        "icon": "⚙️",
-        "color": "#FF9900",
-        "weight": 0.9,
-        "description": "Run and monitor systems to deliver business value",
-        "focus_areas": ["Organization", "Prepare", "Operate", "Evolve"]
-    },
-    "sustainability": {
-        "name": "Sustainability",
-        "icon": "🌱",
-        "color": "#00897B",
-        "weight": 0.8,
-        "description": "Minimize environmental impacts of running cloud workloads",
-        "focus_areas": ["Region selection", "User behavior patterns", "Software patterns", "Data patterns", "Hardware patterns"]
-    }
+    "security": {"name": "Security", "icon": "🔒", "color": "#D32F2F", "weight": 1.5},
+    "reliability": {"name": "Reliability", "icon": "🛡️", "color": "#1976D2", "weight": 1.3},
+    "performance": {"name": "Performance Efficiency", "icon": "⚡", "color": "#7B1FA2", "weight": 1.0},
+    "cost": {"name": "Cost Optimization", "icon": "💰", "color": "#388E3C", "weight": 1.0},
+    "operational_excellence": {"name": "Operational Excellence", "icon": "⚙️", "color": "#FF9900", "weight": 0.9},
+    "sustainability": {"name": "Sustainability", "icon": "🌱", "color": "#00897B", "weight": 0.8}
 }
 
 # ============================================================================
-# SESSION STATE MANAGEMENT
+# AWS CREDENTIALS AUTO-LOADING (ENHANCED)
+# ============================================================================
+
+def auto_load_aws_credentials() -> Tuple[bool, Optional[str], Optional[Dict]]:
+    """
+    Automatically load AWS credentials from Streamlit secrets.
+    Returns: (success, message, identity_info)
+    """
+    if not BOTO3_AVAILABLE:
+        return False, "boto3 not available", None
+    
+    try:
+        # Check secrets availability
+        if not hasattr(st, 'secrets'):
+            return False, "No secrets configured", None
+        
+        secrets_keys = list(st.secrets.keys()) if st.secrets else []
+        
+        # Try multiple secret formats
+        access_key = None
+        secret_key = None
+        region = 'us-east-1'
+        
+        # Format 1: [aws] section
+        if 'aws' in st.secrets:
+            aws_section = dict(st.secrets['aws'])
+            access_key = (
+                aws_section.get('access_key_id') or 
+                aws_section.get('ACCESS_KEY_ID') or
+                aws_section.get('aws_access_key_id') or
+                aws_section.get('AWS_ACCESS_KEY_ID')
+            )
+            secret_key = (
+                aws_section.get('secret_access_key') or 
+                aws_section.get('SECRET_ACCESS_KEY') or
+                aws_section.get('aws_secret_access_key') or
+                aws_section.get('AWS_SECRET_ACCESS_KEY')
+            )
+            region = (
+                aws_section.get('default_region') or 
+                aws_section.get('region') or 
+                aws_section.get('AWS_REGION') or
+                aws_section.get('AWS_DEFAULT_REGION') or
+                'us-east-1'
+            )
+        
+        # Format 2: Flat keys
+        if not access_key:
+            access_key = st.secrets.get('AWS_ACCESS_KEY_ID')
+            secret_key = st.secrets.get('AWS_SECRET_ACCESS_KEY')
+            region = st.secrets.get('AWS_REGION', st.secrets.get('AWS_DEFAULT_REGION', 'us-east-1'))
+        
+        if not access_key or not secret_key:
+            return False, "AWS credentials not found in secrets", None
+        
+        # Create session and test
+        session = boto3.Session(
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name=region
+        )
+        
+        # Test connection
+        sts = session.client('sts')
+        identity = sts.get_caller_identity()
+        
+        # Store in session state
+        st.session_state.aws_session = session
+        st.session_state.aws_connected = True
+        st.session_state.aws_region = region
+        st.session_state.aws_identity = {
+            'account': identity.get('Account'),
+            'arn': identity.get('Arn'),
+            'user_id': identity.get('UserId')
+        }
+        
+        return True, f"Connected to account {identity.get('Account')}", st.session_state.aws_identity
+        
+    except ClientError as e:
+        return False, f"AWS Error: {e.response['Error']['Message']}", None
+    except Exception as e:
+        return False, f"Error: {str(e)}", None
+
+# ============================================================================
+# SESSION STATE
 # ============================================================================
 
 def init_session_state():
-    """Initialize all session state variables"""
+    """Initialize session state with auto-loading"""
     defaults = {
         'anthropic_api_key': None,
-        'aws_credentials': None,
         'aws_session': None,
         'aws_connected': False,
         'aws_identity': None,
+        'aws_region': 'us-east-1',
         'app_mode': 'demo',
         'landscape_assessment': None,
         'analysis_results': None,
-        'assessment_history': [],
         'organization_context': '',
         'organization_name': '',
-        'industry': '',
-        'selected_frameworks': [],
-        'ai_recommendations': [],
+        'selected_pattern': 'microservices',
+        'aws_auto_loaded': False
     }
     
     for key, value in defaults.items():
@@ -332,24 +307,15 @@ def init_session_state():
     if not st.session_state.anthropic_api_key:
         st.session_state.anthropic_api_key = get_api_key()
     
-    # Auto-load AWS credentials
-    if not st.session_state.aws_credentials and MODULE_STATUS.get('AWS Connector'):
-        try:
-            creds, _ = get_aws_credentials_from_secrets()
-            if creds:
-                st.session_state.aws_credentials = creds
-                session = get_aws_session(creds)
-                if session:
-                    success, msg, identity = test_aws_connection(session)
-                    if success:
-                        st.session_state.aws_session = session
-                        st.session_state.aws_connected = True
-                        st.session_state.aws_identity = identity
-        except:
-            pass
+    # Auto-load AWS credentials (only once)
+    if not st.session_state.aws_auto_loaded and BOTO3_AVAILABLE:
+        success, msg, identity = auto_load_aws_credentials()
+        st.session_state.aws_auto_loaded = True
+        if success:
+            st.session_state.aws_connected = True
 
 def get_api_key() -> Optional[str]:
-    """Get Anthropic API key from various sources"""
+    """Get Anthropic API key"""
     if st.session_state.get('anthropic_api_key'):
         return st.session_state.anthropic_api_key
     try:
@@ -363,7 +329,7 @@ def get_api_key() -> Optional[str]:
     return os.environ.get('ANTHROPIC_API_KEY')
 
 def get_anthropic_client():
-    """Get configured Anthropic client"""
+    """Get Anthropic client"""
     if not ANTHROPIC_AVAILABLE:
         return None
     api_key = get_api_key()
@@ -379,13 +345,13 @@ def get_anthropic_client():
 # ============================================================================
 
 def render_sidebar():
-    """Render sidebar with configuration"""
+    """Render sidebar"""
     with st.sidebar:
         st.markdown("""
         <div style="text-align: center; padding: 1rem 0;">
             <img src="https://a0.awsstatic.com/libra-css/images/logos/aws_smile-header-desktop-en-white_59x35.png" width="60">
             <h3 style="color: #FF9900; margin: 0.5rem 0 0 0; font-size: 1rem;">Well-Architected Advisor</h3>
-            <p style="color: #666; font-size: 0.75rem; margin: 0;">Enterprise Edition v2.0</p>
+            <p style="color: #666; font-size: 0.75rem; margin: 0;">Enterprise Edition v2.1</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -406,27 +372,55 @@ def render_sidebar():
         else:
             if st.session_state.get('aws_connected'):
                 st.success(f"✅ AWS Connected")
-                if st.session_state.get('aws_identity'):
-                    st.caption(f"Account: {st.session_state.aws_identity.get('account', 'N/A')}")
             else:
-                st.warning("⚠️ Configure AWS in connector tab")
+                st.warning("⚠️ AWS not connected")
         
         st.markdown("---")
         
         # Configuration Status
         st.markdown("### ⚙️ Configuration")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("🟢 AI" if get_api_key() else "🔴 AI")
-        with col2:
-            st.markdown("🟢 AWS" if st.session_state.get('aws_connected') else "🟡 AWS")
         
-        if not get_api_key():
+        # API Key Status
+        if get_api_key():
+            st.markdown('<div class="status-connected">✅ API Key configured</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="status-pending">⚠️ API Key needed</div>', unsafe_allow_html=True)
             with st.expander("🔑 Configure AI"):
                 api_key = st.text_input("Anthropic API Key", type="password")
                 if api_key:
                     st.session_state.anthropic_api_key = api_key
                     st.rerun()
+        
+        st.markdown("")
+        
+        # AWS Connection Status
+        st.markdown("### 🔐 AWS Connection")
+        
+        if st.session_state.get('aws_connected'):
+            identity = st.session_state.get('aws_identity', {})
+            st.markdown(f"""
+            <div class="status-connected">
+                ✅ Connected<br>
+                <small>Account: {identity.get('account', 'N/A')}</small><br>
+                <small>Region: {st.session_state.get('aws_region', 'N/A')}</small>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("🔄 Reconnect AWS"):
+                st.session_state.aws_auto_loaded = False
+                st.session_state.aws_connected = False
+                st.rerun()
+        else:
+            st.markdown('<div class="status-pending">⚠️ Not connected</div>', unsafe_allow_html=True)
+            
+            if st.button("🔌 Connect to AWS"):
+                success, msg, identity = auto_load_aws_credentials()
+                if success:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+                    st.info("Configure AWS credentials in Streamlit secrets")
         
         st.markdown("---")
         
@@ -436,7 +430,7 @@ def render_sidebar():
         total = len(MODULE_STATUS)
         st.markdown(f"{'✅' if loaded == total else '⚠️'} {loaded}/{total} loaded")
         
-        with st.expander("Details"):
+        with st.expander("View Details"):
             for name, status in MODULE_STATUS.items():
                 st.markdown(f"{'✅' if status else '❌'} {name}")
         
@@ -444,10 +438,10 @@ def render_sidebar():
         
         # Organization Context
         st.markdown("### 🏢 Organization")
-        org_name = st.text_input("Name", value=st.session_state.get('organization_name', ''), placeholder="Acme Corp")
+        org_name = st.text_input("Name", value=st.session_state.get('organization_name', ''))
         st.session_state.organization_name = org_name
         
-        context = st.text_area("Context", value=st.session_state.get('organization_context', ''), placeholder="Industry, compliance needs...", height=60)
+        context = st.text_area("Context", value=st.session_state.get('organization_context', ''), height=60)
         st.session_state.organization_context = context
         
         st.markdown("---")
@@ -471,22 +465,25 @@ def render_executive_dashboard():
         <div style="text-align: center; padding: 3rem; background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%); border-radius: 12px;">
             <h2 style="color: #232F3E;">👋 Welcome to AWS Well-Architected Advisor</h2>
             <p style="color: #666; max-width: 600px; margin: 0 auto 2rem auto;">
-                Get AI-powered insights into your AWS architecture aligned with the Well-Architected Framework.
+                Enterprise-grade AI-powered architecture review platform with comprehensive implementation roadmaps, 
+                cost analysis, and industry best practices.
             </p>
         </div>
         """, unsafe_allow_html=True)
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.markdown('<div class="dashboard-card"><h3>📊 1. Run Assessment</h3><p>Scan your AWS environment or use demo mode.</p></div>', unsafe_allow_html=True)
-            if st.button("Run Demo Assessment", use_container_width=True):
+            st.markdown('<div class="dashboard-card"><h4>📊 1. Run Assessment</h4><p>Scan AWS or use demo</p></div>', unsafe_allow_html=True)
+            if st.button("Run Demo", use_container_width=True):
                 if MODULE_STATUS.get('Landscape Scanner'):
                     st.session_state.landscape_assessment = generate_demo_assessment()
                     st.rerun()
         with col2:
-            st.markdown('<div class="dashboard-card"><h3>📤 2. Upload Architecture</h3><p>Upload diagrams or IaC for AI review.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="dashboard-card"><h4>🏗️ 2. Architecture Patterns</h4><p>Best practices & roadmaps</p></div>', unsafe_allow_html=True)
         with col3:
-            st.markdown('<div class="dashboard-card"><h3>🔧 3. Connect AWS</h3><p>Connect your AWS account for live scanning.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="dashboard-card"><h4>💰 3. Cost Analysis</h4><p>TCO & optimization</p></div>', unsafe_allow_html=True)
+        with col4:
+            st.markdown('<div class="dashboard-card"><h4>📋 4. Compliance</h4><p>Multi-framework assessment</p></div>', unsafe_allow_html=True)
         return
     
     # Dashboard with data
@@ -526,7 +523,7 @@ def render_executive_dashboard():
                 findings = ps.findings_count
             else:
                 score, color, findings = "-", "#666", 0
-            st.markdown(f'<div class="pillar-card"><div style="font-size: 1.5rem;">{pillar["icon"]}</div><div style="font-size: 1.8rem; font-weight: 700; color: {color};">{score}</div><div style="font-size: 0.75rem; color: #666;">{pillar["name"].split()[0]}</div><div style="font-size: 0.7rem; color: #999;">{findings} findings</div></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="pillar-card"><div style="font-size: 1.5rem;">{pillar["icon"]}</div><div style="font-size: 1.8rem; font-weight: 700; color: {color};">{score}</div><div style="font-size: 0.75rem; color: #666;">{pillar["name"].split()[0]}</div></div>', unsafe_allow_html=True)
     
     st.markdown("---")
     
@@ -542,19 +539,19 @@ def render_executive_dashboard():
     with col2:
         st.markdown("### 📦 Resources")
         inv = assessment.inventory
-        resources = [("EC2", inv.ec2_instances), ("S3", inv.s3_buckets), ("RDS", inv.rds_instances), ("Lambda", inv.lambda_functions), ("EBS", inv.ebs_volumes)]
+        resources = [("EC2", inv.ec2_instances), ("S3", inv.s3_buckets), ("RDS", inv.rds_instances), ("Lambda", inv.lambda_functions)]
         for name, count in resources:
             st.markdown(f"**{name}:** {count}")
 
 # ============================================================================
-# ARCHITECTURE REVIEW TAB
+# ARCHITECTURE REVIEW
 # ============================================================================
 
 def render_architecture_review_tab():
-    """Render architecture review tab"""
-    st.markdown('<div style="background: linear-gradient(135deg, #1565C0 0%, #1976D2 100%); padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 1.5rem;"><h2 style="color: white; margin: 0;">📤 Architecture Review</h2><p style="color: #BBDEFB; margin: 0.3rem 0 0 0;">Upload your architecture for AI-powered WAF analysis</p></div>', unsafe_allow_html=True)
+    """Render architecture review"""
+    st.markdown('<div style="background: linear-gradient(135deg, #1565C0 0%, #1976D2 100%); padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 1.5rem;"><h2 style="color: white; margin: 0;">📤 Architecture Review</h2><p style="color: #BBDEFB; margin: 0;">AI-powered WAF analysis</p></div>', unsafe_allow_html=True)
     
-    input_method = st.radio("Input Method", ["🖼️ Architecture Diagram", "📝 CloudFormation/Terraform", "✏️ Text Description"], horizontal=True)
+    input_method = st.radio("Input Method", ["🖼️ Diagram", "📝 IaC", "✏️ Description"], horizontal=True)
     
     architecture_data = None
     image_data = None
@@ -563,82 +560,57 @@ def render_architecture_review_tab():
     
     with col1:
         if "Diagram" in input_method:
-            uploaded = st.file_uploader("Upload diagram (PNG, JPG)", type=['png', 'jpg', 'jpeg', 'webp'])
+            uploaded = st.file_uploader("Upload diagram", type=['png', 'jpg', 'jpeg', 'webp'])
             if uploaded:
                 st.image(uploaded, use_container_width=True)
                 image_data = {'data': base64.b64encode(uploaded.read()).decode('utf-8'), 'type': uploaded.type}
                 uploaded.seek(0)
-                architecture_data = f"[Architecture diagram: {uploaded.name}]"
-        elif "CloudFormation" in input_method:
-            code = st.text_area("Paste IaC code", height=300)
+                architecture_data = f"[Diagram: {uploaded.name}]"
+        elif "IaC" in input_method:
+            code = st.text_area("CloudFormation/Terraform", height=300)
             if code:
                 architecture_data = code
         else:
-            desc = st.text_area("Describe your architecture", height=300)
+            desc = st.text_area("Describe architecture", height=300)
             if desc:
                 architecture_data = desc
     
     with col2:
-        st.markdown("**Analysis Context**")
-        workload_type = st.selectbox("Workload Type", ["General Purpose", "Web Application", "Data Analytics", "Serverless", "Container-based"])
-        compliance_needs = st.multiselect("Compliance", ["SOC 2", "HIPAA", "PCI DSS", "GDPR"])
-        additional_context = st.text_area("Additional Context", height=80)
+        workload_type = st.selectbox("Workload", ["General", "Web App", "Analytics", "Serverless", "Container"])
+        compliance = st.multiselect("Compliance", ["SOC 2", "HIPAA", "PCI DSS", "GDPR"])
     
-    if st.button("🔍 Analyze Architecture", type="primary", use_container_width=True):
+    if st.button("🔍 Analyze", type="primary", use_container_width=True):
         if not architecture_data:
-            st.warning("Please provide architecture information")
+            st.warning("Provide architecture information")
             return
-        
         client = get_anthropic_client()
         if not client:
-            st.error("Configure Anthropic API key in sidebar")
+            st.error("Configure API key")
             return
-        
-        with st.spinner("Analyzing with Claude AI..."):
-            results = analyze_architecture_with_ai(client, architecture_data, {'workload_type': workload_type, 'compliance': compliance_needs, 'context': additional_context}, image_data)
-        
+        with st.spinner("Analyzing..."):
+            results = analyze_architecture(client, architecture_data, {'workload': workload_type, 'compliance': compliance}, image_data)
         if results:
             st.session_state.analysis_results = results
-            st.success("✅ Analysis complete! View in WAF Results tab")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Score", f"{results.get('overall_score', 0)}/100")
-            with col2:
-                st.metric("Risk", results.get('overall_risk', 'Unknown'))
-            with col3:
-                findings = sum(len(p.get('findings', [])) for p in results.get('pillar_assessments', {}).values())
-                st.metric("Findings", findings)
+            st.success("✅ Complete! View in WAF Results tab")
 
-def analyze_architecture_with_ai(client, architecture: str, context: Dict, image_data: Optional[Dict] = None) -> Dict:
-    """AI analysis of architecture"""
-    prompt = f"""Perform a comprehensive AWS Well-Architected Framework review.
+def analyze_architecture(client, architecture: str, context: Dict, image_data: Optional[Dict] = None) -> Dict:
+    """AI architecture analysis"""
+    prompt = f"""Analyze this AWS architecture against Well-Architected Framework:
 
 ARCHITECTURE: {architecture}
-CONTEXT: Workload: {context.get('workload_type')}, Compliance: {context.get('compliance')}, Additional: {context.get('context')}
+CONTEXT: {context}
 
-Return detailed JSON:
-{{
-    "executive_summary": "3-4 sentence assessment",
-    "overall_score": 0-100,
-    "overall_risk": "Critical|High|Medium|Low",
-    "pillar_assessments": {{
-        "Security": {{"score": 0-100, "risk_level": "...", "strengths": [...], "gaps": [...], "findings": [{{"title": "...", "severity": "Critical|High|Medium|Low", "description": "...", "recommendation": "...", "implementation_steps": [...], "effort": "Low|Medium|High"}}]}},
-        "Reliability": {{...}},
-        "Performance Efficiency": {{...}},
-        "Cost Optimization": {{...}},
-        "Operational Excellence": {{...}},
-        "Sustainability": {{...}}
-    }},
-    "remediation_roadmap": {{"immediate": [...], "short_term": [...], "medium_term": [...], "long_term": [...]}},
-    "estimated_savings": {{"monthly": 0, "annual": 0}}
-}}
+Return JSON with: executive_summary, overall_score (0-100), overall_risk, pillar_assessments (each with score, strengths, gaps, findings), remediation_roadmap (immediate/short_term/medium_term/long_term), estimated_savings.
 
-Be thorough and specific with AWS services and best practices."""
+Be specific with AWS services and best practices."""
 
     try:
         messages = [{"role": "user", "content": prompt}]
         if image_data:
-            messages = [{"role": "user", "content": [{"type": "image", "source": {"type": "base64", "media_type": image_data['type'], "data": image_data['data']}}, {"type": "text", "text": prompt}]}]
+            messages = [{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": image_data['type'], "data": image_data['data']}},
+                {"type": "text", "text": prompt}
+            ]}]
         
         response = client.messages.create(model="claude-sonnet-4-20250514", max_tokens=8000, messages=messages)
         
@@ -648,11 +620,11 @@ Be thorough and specific with AWS services and best practices."""
         if json_match:
             return json.loads(json_match.group())
     except Exception as e:
-        st.error(f"Analysis failed: {e}")
+        st.error(f"Error: {e}")
     return None
 
 # ============================================================================
-# WAF RESULTS TAB
+# WAF RESULTS
 # ============================================================================
 
 def render_waf_results_tab():
@@ -662,7 +634,7 @@ def render_waf_results_tab():
     
     if not results and not assessment:
         st.info("📋 No results. Run an assessment first.")
-        if st.button("🎭 Generate Demo Assessment"):
+        if st.button("🎭 Generate Demo"):
             if MODULE_STATUS.get('Landscape Scanner'):
                 st.session_state.landscape_assessment = generate_demo_assessment()
                 st.rerun()
@@ -671,198 +643,121 @@ def render_waf_results_tab():
     tabs = st.tabs(["📊 Overview", "📈 Pillars", "🚨 Findings", "🗺️ Roadmap", "📥 Export"])
     
     with tabs[0]:
-        render_results_overview(results, assessment)
+        if results:
+            st.markdown(f"**Executive Summary:** {results.get('executive_summary', '')}")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Score", f"{results.get('overall_score', 0)}/100")
+            with col2:
+                st.metric("Risk", results.get('overall_risk', 'Unknown'))
+            with col3:
+                findings = sum(len(p.get('findings', [])) for p in results.get('pillar_assessments', {}).values())
+                st.metric("Findings", findings)
+        elif assessment:
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Score", f"{assessment.overall_score}/100")
+            with col2:
+                st.metric("Risk", assessment.overall_risk)
+            with col3:
+                st.metric("Findings", len(assessment.findings))
+    
     with tabs[1]:
-        render_pillar_details(results, assessment)
+        if results:
+            for pn, pd in results.get('pillar_assessments', {}).items():
+                with st.expander(f"{pn} - Score: {pd.get('score', 0)}/100"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown("**Strengths:**")
+                        for s in pd.get('strengths', [])[:3]:
+                            st.markdown(f"- {s}")
+                    with col2:
+                        st.markdown("**Gaps:**")
+                        for g in pd.get('gaps', [])[:3]:
+                            st.markdown(f"- {g}")
+        elif assessment:
+            for pn, ps in assessment.pillar_scores.items():
+                with st.expander(f"{pn} - Score: {ps.score}/100"):
+                    st.metric("Findings", ps.findings_count)
+    
     with tabs[2]:
-        render_all_findings(results, assessment)
-    with tabs[3]:
-        render_remediation_roadmap(results, assessment)
-    with tabs[4]:
-        render_export_options(results, assessment)
-
-def render_results_overview(results, assessment):
-    """Render overview"""
-    st.markdown("### 📊 Assessment Overview")
-    
-    if results:
-        score, risk = results.get('overall_score', 0), results.get('overall_risk', 'Unknown')
-        summary = results.get('executive_summary', '')
-    elif assessment:
-        score, risk = assessment.overall_score, assessment.overall_risk
-        summary = f"Assessment with {len(assessment.findings)} findings."
-    else:
-        return
-    
-    if summary:
-        st.markdown(f'<div class="dashboard-card"><h3>📋 Executive Summary</h3><p>{summary}</p></div>', unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        color = "#388E3C" if score >= 80 else "#FBC02D" if score >= 60 else "#D32F2F"
-        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color: {color};">{score}</div><div class="metric-label">Overall Score</div></div>', unsafe_allow_html=True)
-    with col2:
-        st.metric("Risk Level", risk)
-    with col3:
         if assessment:
-            st.metric("Findings", len(assessment.findings))
-
-def render_pillar_details(results, assessment):
-    """Render pillar details"""
-    st.markdown("### 📈 Pillar Assessments")
+            severity_filter = st.multiselect("Severity", ["CRITICAL", "HIGH", "MEDIUM", "LOW"], default=["CRITICAL", "HIGH"])
+            filtered = [f for f in assessment.findings if f.severity in severity_filter]
+            for f in filtered:
+                sev_icon = {'CRITICAL': '🔴', 'HIGH': '🟠', 'MEDIUM': '🟡', 'LOW': '🟢'}.get(f.severity, '⚪')
+                with st.expander(f"{sev_icon} {f.title}"):
+                    st.markdown(f"**Description:** {f.description}")
+                    if f.recommendation:
+                        st.success(f"💡 {f.recommendation}")
+                    if f.remediation_steps:
+                        st.markdown("**Remediation:**")
+                        for i, step in enumerate(f.remediation_steps, 1):
+                            st.markdown(f"{i}. {step}")
     
-    pillar_data = {}
-    if results:
-        pillar_data = results.get('pillar_assessments', {})
-    elif assessment:
-        for pn, ps in assessment.pillar_scores.items():
-            pillar_data[pn] = {'score': ps.score, 'findings': [{'title': f.title, 'severity': f.severity, 'description': f.description, 'recommendation': f.recommendation} for f in ps.top_findings]}
-    
-    for pillar_name, data in pillar_data.items():
-        pillar_info = next((p for k, p in WAF_PILLARS.items() if p['name'] == pillar_name), None)
-        icon = pillar_info['icon'] if pillar_info else '📊'
-        score = data.get('score', 0)
-        color = "#388E3C" if score >= 80 else "#FBC02D" if score >= 60 else "#D32F2F"
-        
-        with st.expander(f"{icon} {pillar_name} - Score: {score}/100", expanded=score < 60):
+    with tabs[3]:
+        if results and results.get('remediation_roadmap'):
+            roadmap = results['remediation_roadmap']
             col1, col2 = st.columns(2)
             with col1:
-                st.markdown("**✅ Strengths:**")
-                for s in data.get('strengths', [])[:3]:
-                    st.markdown(f"- {s}")
+                st.markdown("#### 🚨 Immediate")
+                for item in roadmap.get('immediate', []):
+                    st.markdown(f"- {item}")
+                st.markdown("#### ⚡ Short-term")
+                for item in roadmap.get('short_term', []):
+                    st.markdown(f"- {item}")
             with col2:
-                st.markdown("**⚠️ Gaps:**")
-                for g in data.get('gaps', [])[:3]:
-                    st.markdown(f"- {g}")
-            
-            for finding in data.get('findings', [])[:5]:
-                sev = finding.get('severity', 'Medium')
-                sev_icon = {'Critical': '🔴', 'High': '🟠', 'Medium': '🟡', 'Low': '🟢', 'CRITICAL': '🔴', 'HIGH': '🟠', 'MEDIUM': '🟡', 'LOW': '🟢'}.get(sev, '⚪')
-                st.markdown(f"**{sev_icon} {finding.get('title')}**")
-                if finding.get('recommendation'):
-                    st.success(f"💡 {finding['recommendation']}")
-
-def render_all_findings(results, assessment):
-    """Render all findings"""
-    st.markdown("### 🚨 All Findings")
+                st.markdown("#### 📅 Medium-term")
+                for item in roadmap.get('medium_term', []):
+                    st.markdown(f"- {item}")
+                st.markdown("#### 🎯 Long-term")
+                for item in roadmap.get('long_term', []):
+                    st.markdown(f"- {item}")
     
-    all_findings = []
-    if results:
-        for pn, pd in results.get('pillar_assessments', {}).items():
-            for f in pd.get('findings', []):
-                f['pillar'] = pn
-                all_findings.append(f)
-    if assessment:
-        for f in assessment.findings:
-            all_findings.append({'title': f.title, 'description': f.description, 'severity': f.severity, 'pillar': f.pillar, 'recommendation': f.recommendation, 'effort': f.effort, 'estimated_savings': f.estimated_savings})
-    
-    if not all_findings:
-        st.info("No findings")
-        return
-    
-    severity_filter = st.multiselect("Severity Filter", ["CRITICAL", "HIGH", "MEDIUM", "LOW", "Critical", "High", "Medium", "Low"], default=["CRITICAL", "HIGH", "Critical", "High"])
-    filtered = [f for f in all_findings if f.get('severity') in severity_filter] if severity_filter else all_findings
-    filtered.sort(key=lambda f: {'CRITICAL': 0, 'Critical': 0, 'HIGH': 1, 'High': 1, 'MEDIUM': 2, 'Medium': 2}.get(f.get('severity', ''), 4))
-    
-    st.markdown(f"**Showing {len(filtered)} of {len(all_findings)} findings**")
-    
-    for f in filtered:
-        sev = f.get('severity', 'Medium')
-        sev_icon = {'CRITICAL': '🔴', 'Critical': '🔴', 'HIGH': '🟠', 'High': '🟠', 'MEDIUM': '🟡', 'Medium': '🟡', 'LOW': '🟢', 'Low': '🟢'}.get(sev, '⚪')
-        with st.expander(f"{sev_icon} [{sev}] {f.get('title')} - {f.get('pillar', 'Unknown')}"):
-            st.markdown(f"**Description:** {f.get('description', 'N/A')}")
-            if f.get('recommendation'):
-                st.success(f"💡 {f['recommendation']}")
-            if f.get('implementation_steps'):
-                for i, step in enumerate(f['implementation_steps'], 1):
-                    st.markdown(f"{i}. {step}")
-
-def render_remediation_roadmap(results, assessment):
-    """Render roadmap"""
-    st.markdown("### 🗺️ Remediation Roadmap")
-    
-    if results and results.get('remediation_roadmap'):
-        roadmap = results['remediation_roadmap']
+    with tabs[4]:
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("#### 🚨 Immediate (0-7 days)")
-            for item in roadmap.get('immediate', []):
-                st.markdown(f"- {item}")
-            st.markdown("#### ⚡ Short-term (8-30 days)")
-            for item in roadmap.get('short_term', []):
-                st.markdown(f"- {item}")
+            if assessment and MODULE_STATUS.get('PDF Reports'):
+                try:
+                    pdf_bytes = generate_comprehensive_waf_report(assessment)
+                    st.download_button("📄 Download PDF", pdf_bytes, file_name=f"WAF_Report_{datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf", use_container_width=True)
+                except Exception as e:
+                    st.error(f"PDF error: {e}")
         with col2:
-            st.markdown("#### 📅 Medium-term (1-3 months)")
-            for item in roadmap.get('medium_term', []):
-                st.markdown(f"- {item}")
-            st.markdown("#### 🎯 Long-term (3-12 months)")
-            for item in roadmap.get('long_term', []):
-                st.markdown(f"- {item}")
-    elif assessment:
-        st.markdown("#### 🚨 Immediate (Critical & High, Low Effort)")
-        for f in [f for f in assessment.findings if f.severity in ['CRITICAL', 'HIGH'] and f.effort == 'Low'][:5]:
-            st.markdown(f"- **{f.title}**: {f.recommendation[:80]}")
-
-def render_export_options(results, assessment):
-    """Render export"""
-    st.markdown("### 📥 Export Options")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if assessment and MODULE_STATUS.get('PDF Reports'):
-            try:
-                pdf_bytes = generate_comprehensive_waf_report(assessment)
-                st.download_button("📄 Download PDF", pdf_bytes, file_name=f"WAF_Report_{datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf", use_container_width=True)
-            except Exception as e:
-                st.error(f"PDF error: {e}")
-    with col2:
-        if results or assessment:
-            export_data = {'export_date': datetime.now().isoformat(), 'ai_results': results, 'assessment_id': assessment.assessment_id if assessment else None}
-            st.download_button("📊 Download JSON", json.dumps(export_data, indent=2, default=str), file_name=f"WAF_Export_{datetime.now().strftime('%Y%m%d')}.json", mime="application/json", use_container_width=True)
-    with col3:
-        if assessment and PANDAS_AVAILABLE:
-            findings_list = [{'Title': f.title, 'Severity': f.severity, 'Pillar': f.pillar, 'Recommendation': f.recommendation} for f in assessment.findings]
-            if findings_list:
-                df = pd.DataFrame(findings_list)
-                st.download_button("📋 Download CSV", df.to_csv(index=False), file_name=f"WAF_Findings_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", use_container_width=True)
+            if results or assessment:
+                export_data = {'date': datetime.now().isoformat(), 'results': results, 'assessment_score': assessment.overall_score if assessment else None}
+                st.download_button("📊 Download JSON", json.dumps(export_data, indent=2, default=str), file_name=f"WAF_Export_{datetime.now().strftime('%Y%m%d')}.json", mime="application/json", use_container_width=True)
 
 # ============================================================================
-# KNOWLEDGE BASE TAB
+# KNOWLEDGE BASE
 # ============================================================================
 
 def render_knowledge_base_tab():
     """Render knowledge base"""
-    st.markdown('<div style="background: linear-gradient(135deg, #5E35B1 0%, #7E57C2 100%); padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 1.5rem;"><h2 style="color: white; margin: 0;">📚 Well-Architected Knowledge Base</h2></div>', unsafe_allow_html=True)
+    st.markdown('<div style="background: linear-gradient(135deg, #5E35B1 0%, #7E57C2 100%); padding: 1.5rem 2rem; border-radius: 12px; margin-bottom: 1.5rem;"><h2 style="color: white; margin: 0;">📚 Knowledge Base</h2></div>', unsafe_allow_html=True)
     
     tabs = st.tabs(["📖 WAF Pillars", "🔧 Best Practices", "🔗 Resources"])
     
     with tabs[0]:
         for key, pillar in WAF_PILLARS.items():
             with st.expander(f"{pillar['icon']} {pillar['name']}"):
-                st.markdown(f"**Description:** {pillar['description']}")
-                st.markdown("**Focus Areas:**")
-                for area in pillar['focus_areas']:
-                    st.markdown(f"- {area}")
                 st.markdown(f"[📖 AWS Docs](https://docs.aws.amazon.com/wellarchitected/latest/framework/{key.replace('_', '-')}.html)")
     
     with tabs[1]:
         practices = {
-            "Identity & Access": ["Use AWS Organizations", "Implement least privilege", "Enable MFA", "Use IAM roles"],
-            "Data Protection": ["Encrypt at rest with KMS", "Use TLS 1.2+", "Enable S3 Block Public Access"],
-            "Monitoring": ["Enable CloudTrail", "Use CloudWatch", "Enable GuardDuty"],
-            "Cost": ["Use Reserved Instances", "Right-size resources", "Enable Cost Explorer"]
+            "Identity & Access": ["AWS Organizations", "Least privilege IAM", "Enable MFA", "Use IAM roles"],
+            "Data Protection": ["KMS encryption", "TLS 1.2+", "S3 Block Public Access"],
+            "Monitoring": ["CloudTrail", "CloudWatch", "GuardDuty"],
+            "Cost": ["Reserved Instances", "Right-sizing", "Cost Explorer"]
         }
         for cat, items in practices.items():
-            st.markdown(f"**{cat}**")
-            for item in items:
-                st.markdown(f"- {item}")
+            st.markdown(f"**{cat}:** {', '.join(items)}")
     
     with tabs[2]:
         st.markdown("""
-        **AWS Resources:**
-        - [AWS Well-Architected Framework](https://docs.aws.amazon.com/wellarchitected/latest/framework/)
-        - [AWS Well-Architected Tool](https://aws.amazon.com/well-architected-tool/)
+        - [AWS Well-Architected Framework](https://docs.aws.amazon.com/wellarchitected/)
         - [AWS Architecture Center](https://aws.amazon.com/architecture/)
+        - [AWS Solutions Library](https://aws.amazon.com/solutions/)
         """)
 
 # ============================================================================
@@ -875,48 +770,74 @@ def main():
     render_sidebar()
     
     is_demo = st.session_state.get('app_mode', 'demo') == 'demo'
-    mode_badge = "🎭 Demo Mode" if is_demo else "🔴 Live Mode"
+    mode_badge = "🎭 Demo" if is_demo else "🔴 Live"
     mode_color = "#1565C0" if is_demo else "#2E7D32"
     
-    st.markdown(f'<div class="main-header"><div style="display: flex; justify-content: space-between; align-items: center;"><div><h1>🏗️ AWS Well-Architected Framework Advisor</h1><p>Enterprise-Grade AI-Powered Architecture Review Platform</p></div><div style="background: {mode_color}; padding: 0.5rem 1rem; border-radius: 20px; color: white; font-weight: 600;">{mode_badge}</div></div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="main-header"><div style="display: flex; justify-content: space-between; align-items: center;"><div><h1>🏗️ AWS Well-Architected Framework Advisor</h1><p>Enterprise AI-Powered Architecture Review Platform</p></div><div style="background: {mode_color}; padding: 0.5rem 1rem; border-radius: 20px; color: white; font-weight: 600;">{mode_badge}</div></div></div>', unsafe_allow_html=True)
     
-    tabs = st.tabs(["📊 Dashboard", "🎯 AWS Scanner", "📤 Architecture Review", "📈 WAF Results", "🚀 EKS & Modernization", "💰 FinOps", "📋 Compliance", "🔄 Migration & DR", "📚 Knowledge Base"])
+    # Main tabs - now includes Architecture Patterns
+    tabs = st.tabs([
+        "📊 Dashboard",
+        "🎯 AWS Scanner",
+        "📤 Architecture Review",
+        "📈 WAF Results",
+        "🏛️ Architecture Patterns",  # NEW TAB
+        "🚀 EKS & Modernization",
+        "💰 FinOps",
+        "📋 Compliance",
+        "🔄 Migration & DR",
+        "📚 Knowledge Base"
+    ])
     
     with tabs[0]:
         render_executive_dashboard()
+    
     with tabs[1]:
         if MODULE_STATUS.get('Landscape Scanner'):
             render_landscape_scanner_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('landscape_scanner', 'Unknown')}")
+    
     with tabs[2]:
         render_architecture_review_tab()
+    
     with tabs[3]:
         render_waf_results_tab()
-    with tabs[4]:
+    
+    with tabs[4]:  # NEW TAB
+        if MODULE_STATUS.get('Architecture Patterns'):
+            render_architecture_patterns_tab()
+        else:
+            st.error(f"Module error: {MODULE_ERRORS.get('architecture_patterns', 'Unknown')}")
+    
+    with tabs[5]:
         if MODULE_STATUS.get('EKS & Modernization'):
             render_eks_modernization_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('eks_modernization', 'Unknown')}")
-    with tabs[5]:
+    
+    with tabs[6]:
         if MODULE_STATUS.get('FinOps'):
             render_finops_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('finops_module', 'Unknown')}")
-    with tabs[6]:
+    
+    with tabs[7]:
         if MODULE_STATUS.get('Compliance'):
             render_compliance_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('compliance_module', 'Unknown')}")
-    with tabs[7]:
+    
+    with tabs[8]:
         if MODULE_STATUS.get('Migration & DR'):
             render_migration_dr_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('migration_dr_module', 'Unknown')}")
-    with tabs[8]:
+    
+    with tabs[9]:
         render_knowledge_base_tab()
     
-    st.markdown('<div class="app-footer">AWS Well-Architected Framework Advisor | Enterprise Edition v2.0 | Powered by Claude AI</div>', unsafe_allow_html=True)
+    st.markdown('<div class="app-footer">AWS Well-Architected Framework Advisor | Enterprise Edition v2.1 | Powered by Claude AI</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
