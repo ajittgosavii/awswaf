@@ -595,7 +595,20 @@ def render_user_list():
         return
     
     # Sort by creation date (handle None and missing values)
-    users.sort(key=lambda x: x.get('created_at') or '1970-01-01', reverse=True)
+    # Convert all values to datetime objects for proper comparison
+    def get_sort_datetime(user):
+        created_at = user.get('created_at')
+        if created_at is None:
+            return datetime(1970, 1, 1)  # Default for missing dates
+        if isinstance(created_at, str):
+            try:
+                return datetime.fromisoformat(created_at)
+            except:
+                return datetime(1970, 1, 1)
+        # Handle Firebase DatetimeWithNanoseconds or datetime objects
+        return created_at
+    
+    users.sort(key=get_sort_datetime, reverse=True)
     
     # Add search/filter
     col_search, col_filter = st.columns([3, 1])
