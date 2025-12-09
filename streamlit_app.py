@@ -761,14 +761,17 @@ def main():
         if MODULE_STATUS.get('WAF Review'):
             render_waf_review_tab()  # Now includes Scanner, Review, Results, AND Compliance
         else:
-            st.error(f"❌ WAF Assessment Hub Not Loaded")
-            st.info("💡 To enable WAF Assessment Hub:")
-            st.code("""
-# 1. Ensure waf_review_module.py is in your project directory
-# 2. Check the error below for details
+            st.error("❌ WAF Assessment Hub Not Loaded")
+            st.info("""
+            💡 To enable WAF Assessment Hub:
+            
+            ```
+            # 1. Ensure waf_review_module.py is in your project directory
+            # 2. Check the error below for details
+            ```
             """)
-            if 'waf_review_module' in MODULE_ERRORS:
-                st.error(f"Error: {MODULE_ERRORS['waf_review_module']}")
+            with st.expander("🔍 Error Details"):
+                st.code(MODULE_ERRORS.get('waf_review_module', 'Module not found'))
     
     with tabs[2]:  # Architecture & Migration - ENHANCED
         render_architecture_migration_tab()
@@ -777,13 +780,33 @@ def main():
         if MODULE_STATUS.get('Architecture Patterns'):
             render_architecture_patterns_tab()
         else:
-            st.error(f"Module error: {MODULE_ERRORS.get('architecture_patterns', 'Unknown')}")
+            st.error("❌ Architecture Patterns Module Not Loaded")
+            st.info("""
+            💡 To enable Architecture Patterns:
+            
+            ```
+            # 1. Ensure architecture_patterns.py is in your project directory
+            # 2. Check the error below for details
+            ```
+            """)
+            with st.expander("🔍 Error Details"):
+                st.code(MODULE_ERRORS.get('architecture_patterns', 'Module not found'))
     
     with tabs[4]:  # EKS & Modernization
         if MODULE_STATUS.get('EKS & Modernization'):
             render_eks_modernization_tab()
         else:
-            st.error(f"Module error: {MODULE_ERRORS.get('eks_modernization', 'Unknown')}")
+            st.error("❌ EKS & Modernization Module Not Loaded")
+            st.info("""
+            💡 To enable EKS & Modernization Hub:
+            
+            ```
+            # 1. Ensure eks_modernization_module.py is in your project directory
+            # 2. Check the error below for details
+            ```
+            """)
+            with st.expander("🔍 Error Details"):
+                st.code(MODULE_ERRORS.get('eks_modernization', 'Module not found'))
     
     st.markdown('<div class="app-footer">AWS Well-Architected Framework Advisor | Enterprise Edition v2.5 | Powered by Claude AI</div>', unsafe_allow_html=True)
 
