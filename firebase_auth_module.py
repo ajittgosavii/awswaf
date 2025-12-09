@@ -592,8 +592,8 @@ def render_user_list():
         st.info("No users found")
         return
     
-    # Sort by creation date
-    users.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+    # Sort by creation date (handle None and missing values)
+    users.sort(key=lambda x: x.get('created_at') or '1970-01-01', reverse=True)
     
     # Add search/filter
     col_search, col_filter = st.columns([3, 1])
@@ -717,7 +717,7 @@ def render_user_statistics():
     st.markdown("#### Recent Activity")
     recent_users = sorted(
         [u for u in users if u.get('last_login')],
-        key=lambda x: x.get('last_login', ''),
+        key=lambda x: x.get('last_login') or '1970-01-01',
         reverse=True
     )[:5]
     
