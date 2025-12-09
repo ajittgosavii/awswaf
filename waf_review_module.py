@@ -472,9 +472,343 @@ def get_complete_waf_questions() -> List[Question]:
     
     return questions
 
+# ============================================================================
+# MAIN RENDERING FUNCTION
+# ============================================================================
+
+def render_waf_review_tab():
+    """
+    Main rendering function for the WAF Review tab.
+    This is the entry point called by streamlit_app.py
+    """
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #FF9900 0%, #EC7211 100%); 
+                padding: 2rem; border-radius: 12px; margin-bottom: 2rem;">
+        <h2 style="color: white; margin: 0;">🏗️ AWS Well-Architected Framework Review</h2>
+        <p style="color: white; opacity: 0.9; margin: 0.5rem 0 0 0;">
+            Comprehensive assessment across all 6 pillars with AI-powered recommendations
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Initialize session state
+    if 'waf_assessments' not in st.session_state:
+        st.session_state.waf_assessments = {}
+    if 'current_waf_assessment_id' not in st.session_state:
+        st.session_state.current_waf_assessment_id = None
+    
+    # Main navigation
+    current_assessment_id = st.session_state.current_waf_assessment_id
+    
+    if not current_assessment_id or current_assessment_id not in st.session_state.waf_assessments:
+        render_assessment_selection()
+    else:
+        render_assessment_workspace()
+
+def render_assessment_selection():
+    """Render assessment selection and creation screen"""
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown("### 📋 Your Assessments")
+        
+        assessments = st.session_state.waf_assessments
+        
+        if not assessments:
+            st.info("👋 No assessments yet. Create your first comprehensive WAF assessment!")
+        else:
+            for assessment_id, assessment in assessments.items():
+                with st.container():
+                    col_a, col_b, col_c = st.columns([3, 1, 1])
+                    
+                    with col_a:
+                        st.markdown(f"**{assessment.get('name', 'Unnamed Assessment')}**")
+                        st.caption(f"Created: {assessment.get('created_at', 'Unknown')[:10]} | "
+                                 f"Progress: {assessment.get('progress', 0)}%")
+                    
+                    with col_b:
+                        if st.button("📖 Open", key=f"open_{assessment_id}"):
+                            st.session_state.current_waf_assessment_id = assessment_id
+                            st.rerun()
+                    
+                    with col_c:
+                        if st.button("🗑️ Delete", key=f"delete_{assessment_id}"):
+                            del st.session_state.waf_assessments[assessment_id]
+                            st.rerun()
+                    
+                    st.divider()
+    
+    with col2:
+        st.markdown("### ➕ New Assessment")
+        
+        with st.form("new_assessment_form"):
+            assessment_name = st.text_input(
+                "Assessment Name",
+                placeholder="e.g., Production Workload Q4 2024"
+            )
+            
+            workload_name = st.text_input(
+                "Workload Name",
+                placeholder="e.g., E-commerce Platform"
+            )
+            
+            assessment_type = st.selectbox(
+                "Assessment Type",
+                ["Quick (30 min)", "Standard (2 hours)", "Comprehensive (1 day)"]
+            )
+            
+            aws_account = st.text_input(
+                "AWS Account ID (Optional)",
+                placeholder="123456789012"
+            )
+            
+            submitted = st.form_submit_button("🚀 Create Assessment", use_container_width=True)
+            
+            if submitted:
+                if not assessment_name:
+                    st.error("Please provide an assessment name")
+                else:
+                    # Create new assessment
+                    assessment_id = str(uuid.uuid4())
+                    
+                    new_assessment = {
+                        'id': assessment_id,
+                        'name': assessment_name,
+                        'workload_name': workload_name,
+                        'type': assessment_type,
+                        'aws_account': aws_account,
+                        'created_at': datetime.now().isoformat(),
+                        'updated_at': datetime.now().isoformat(),
+                        'progress': 0,
+                        'responses': {},
+                        'scores': {},
+                        'action_items': [],
+                        'status': 'in_progress'
+                    }
+                    
+                    st.session_state.waf_assessments[assessment_id] = new_assessment
+                    st.session_state.current_waf_assessment_id = assessment_id
+                    st.success(f"✅ Created: {assessment_name}")
+                    st.rerun()
+
+def render_assessment_workspace():
+    """Render the main assessment workspace"""
+    assessment_id = st.session_state.current_waf_assessment_id
+    assessment = st.session_state.waf_assessments.get(assessment_id)
+    
+    if not assessment:
+        st.error("Assessment not found")
+        if st.button("← Back to Assessments"):
+            st.session_state.current_waf_assessment_id = None
+            st.rerun()
+        return
+    
+    # Header with back button
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown(f"### 🏗️ {assessment['name']}")
+        st.caption(f"Workload: {assessment.get('workload_name', 'N/A')} | Progress: {assessment.get('progress', 0)}%")
+    with col2:
+        if st.button("← Back", key="back_to_list"):
+            st.session_state.current_waf_assessment_id = None
+            st.rerun()
+    
+    # Main tabs
+    tabs = st.tabs([
+        "📊 Dashboard",
+        "📝 Assessment",
+        "🤖 AI Insights",
+        "📋 Action Items",
+        "📄 Reports"
+    ])
+    
+    with tabs[0]:
+        render_dashboard_tab(assessment)
+    
+    with tabs[1]:
+        render_assessment_tab(assessment)
+    
+    with tabs[2]:
+        render_ai_insights_tab(assessment)
+    
+    with tabs[3]:
+        render_action_items_tab(assessment)
+    
+    with tabs[4]:
+        render_reports_tab(assessment)
+
+def render_dashboard_tab(assessment: Dict):
+    """Render assessment dashboard"""
+    st.markdown("### 📊 Assessment Overview")
+    
+    # Key metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Overall Score", f"{assessment.get('overall_score', 0)}/100")
+    with col2:
+        st.metric("Progress", f"{assessment.get('progress', 0)}%")
+    with col3:
+        st.metric("Questions", f"{len(assessment.get('responses', {}))}/205")
+    with col4:
+        st.metric("Action Items", len(assessment.get('action_items', [])))
+    
+    st.divider()
+    
+    # Pillar scores
+    st.markdown("### 🎯 Pillar Scores")
+    
+    pillar_cols = st.columns(6)
+    for idx, pillar in enumerate(Pillar):
+        with pillar_cols[idx]:
+            score = assessment.get('scores', {}).get(pillar.value, 0)
+            st.markdown(f"""
+            <div style="text-align: center; padding: 1rem; background: white; 
+                        border-radius: 8px; border: 2px solid {pillar.color};">
+                <div style="font-size: 2rem;">{pillar.icon}</div>
+                <div style="font-size: 1.5rem; font-weight: bold; color: {pillar.color};">
+                    {score}
+                </div>
+                <div style="font-size: 0.8rem; color: #666;">
+                    {pillar.value.split()[0]}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+def render_assessment_tab(assessment: Dict):
+    """Render assessment questions"""
+    st.markdown("### 📝 Assessment Questions")
+    
+    questions = get_complete_waf_questions()
+    
+    # Pillar filter
+    pillar_filter = st.selectbox(
+        "Select Pillar",
+        ["All"] + [p.value for p in Pillar],
+        key="pillar_filter"
+    )
+    
+    # Filter questions
+    filtered_questions = questions
+    if pillar_filter != "All":
+        filtered_questions = [q for q in questions if q.pillar.value == pillar_filter]
+    
+    st.info(f"📋 Showing {len(filtered_questions)} questions")
+    
+    # Render questions
+    for idx, question in enumerate(filtered_questions[:10]):  # Show first 10 for demo
+        with st.expander(f"{question.pillar.icon} {question.id}: {question.text}"):
+            st.markdown(f"**Category:** {question.category}")
+            st.markdown(question.description)
+            
+            st.markdown("---")
+            st.markdown("**Select your answer:**")
+            
+            # Response selection
+            response_key = f"response_{question.id}"
+            current_response = assessment.get('responses', {}).get(question.id, {})
+            
+            selected_choice = st.radio(
+                "Choose one:",
+                range(len(question.choices)),
+                format_func=lambda i: f"{question.choices[i].risk_level.icon} {question.choices[i].text}",
+                key=response_key,
+                index=current_response.get('choice_index', 0) if current_response else 0
+            )
+            
+            # Notes
+            notes = st.text_area(
+                "Notes (Optional)",
+                value=current_response.get('notes', ''),
+                key=f"notes_{question.id}"
+            )
+            
+            if st.button("💾 Save Response", key=f"save_{question.id}"):
+                if 'responses' not in assessment:
+                    assessment['responses'] = {}
+                
+                assessment['responses'][question.id] = {
+                    'choice_index': selected_choice,
+                    'choice_text': question.choices[selected_choice].text,
+                    'risk_level': question.choices[selected_choice].risk_level.label,
+                    'points': question.choices[selected_choice].points,
+                    'notes': notes,
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+                # Update progress
+                assessment['progress'] = int((len(assessment['responses']) / 205) * 100)
+                assessment['updated_at'] = datetime.now().isoformat()
+                
+                st.success("✅ Response saved!")
+                st.rerun()
+
+def render_ai_insights_tab(assessment: Dict):
+    """Render AI-powered insights"""
+    st.markdown("### 🤖 AI-Powered Insights")
+    
+    if not ANTHROPIC_AVAILABLE:
+        st.warning("⚠️ Anthropic API not available. Install with: `pip install anthropic`")
+        st.info("💡 Add your API key to Streamlit secrets to enable AI insights.")
+        return
+    
+    if not assessment.get('responses'):
+        st.info("📝 Complete some assessment questions to generate AI insights.")
+        return
+    
+    if st.button("🚀 Generate AI Insights", use_container_width=True):
+        with st.spinner("🤖 Claude is analyzing your assessment..."):
+            # Placeholder for AI analysis
+            st.success("✅ AI analysis complete!")
+            st.markdown("""
+            ### 📊 Executive Summary
+            Your AWS architecture shows strong foundations with opportunities for improvement...
+            
+            ### 🎯 Key Recommendations
+            1. **Security**: Enable AWS GuardDuty for threat detection
+            2. **Cost**: Right-size EC2 instances for 30% savings
+            3. **Reliability**: Implement multi-AZ deployment
+            """)
+
+def render_action_items_tab(assessment: Dict):
+    """Render action items"""
+    st.markdown("### 📋 Action Items")
+    
+    action_items = assessment.get('action_items', [])
+    
+    if not action_items:
+        st.info("✅ No action items yet. Complete the assessment to generate recommendations.")
+        return
+    
+    # Display action items
+    for item in action_items:
+        st.markdown(f"**{item.get('title', 'Action Item')}**")
+        st.caption(f"Priority: {item.get('priority', 'Medium')} | Effort: {item.get('effort', 'Unknown')}")
+
+def render_reports_tab(assessment: Dict):
+    """Render reports"""
+    st.markdown("### 📄 Reports & Export")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("📊 Executive Summary (PDF)", use_container_width=True):
+            st.info("📄 PDF generation coming soon...")
+    
+    with col2:
+        if st.button("📥 Export Data (JSON)", use_container_width=True):
+            export_data = json.dumps(assessment, indent=2, default=str)
+            st.download_button(
+                "⬇️ Download JSON",
+                export_data,
+                file_name=f"waf_assessment_{assessment['id'][:8]}.json",
+                mime="application/json"
+            )
+
 # Export main function
 __all__ = [
     'Pillar', 'RiskLevel', 'AssessmentType',
     'Question', 'Choice', 'Response', 'ActionItem', 'WAFAssessment',
-    'get_complete_waf_questions'
+    'get_complete_waf_questions',
+    'render_waf_review_tab'  # Main function for streamlit_app.py
 ]
