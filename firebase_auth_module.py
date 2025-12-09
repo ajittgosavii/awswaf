@@ -139,6 +139,9 @@ class FirebaseAuthManager:
         if not FIREBASE_ADMIN_AVAILABLE:
             return False, "Firebase Admin SDK not available", None
         
+        if not self.initialized or self.db is None:
+            return False, "Firebase not initialized. Please configure Firebase in settings.", None
+        
         try:
             # Create user in Firebase Auth
             user = auth.create_user(
@@ -183,6 +186,9 @@ class FirebaseAuthManager:
         """
         if not FIREBASE_ADMIN_AVAILABLE:
             return False, "Firebase Admin SDK not available", None
+        
+        if not self.initialized or self.db is None:
+            return False, "Firebase not initialized. Please configure Firebase in settings.", None
         
         try:
             # For password verification, we need the Web API Key
@@ -273,6 +279,10 @@ class FirebaseAuthManager:
         if not FIREBASE_ADMIN_AVAILABLE:
             return []
         
+        if not self.initialized or self.db is None:
+            st.warning("⚠️ Firebase not initialized. Please configure Firebase in settings.")
+            return []
+        
         try:
             users_ref = self.db.collection('users')
             users = []
@@ -291,6 +301,9 @@ class FirebaseAuthManager:
         if not FIREBASE_ADMIN_AVAILABLE:
             return False, "Firebase Admin SDK not available"
         
+        if not self.initialized or self.db is None:
+            return False, "Firebase not initialized. Please configure Firebase in settings."
+        
         try:
             self.db.collection('users').document(uid).update({
                 'role': new_role,
@@ -305,6 +318,9 @@ class FirebaseAuthManager:
         """Disable user account (Admin only)"""
         if not FIREBASE_ADMIN_AVAILABLE:
             return False, "Firebase Admin SDK not available"
+        
+        if not self.initialized or self.db is None:
+            return False, "Firebase not initialized. Please configure Firebase in settings."
         
         try:
             # Disable in Firebase Auth
@@ -326,6 +342,9 @@ class FirebaseAuthManager:
         if not FIREBASE_ADMIN_AVAILABLE:
             return False, "Firebase Admin SDK not available"
         
+        if not self.initialized or self.db is None:
+            return False, "Firebase not initialized. Please configure Firebase in settings."
+        
         try:
             # Enable in Firebase Auth
             auth.update_user(uid, disabled=False)
@@ -345,6 +364,9 @@ class FirebaseAuthManager:
         """Delete user permanently (Admin only)"""
         if not FIREBASE_ADMIN_AVAILABLE:
             return False, "Firebase Admin SDK not available"
+        
+        if not self.initialized or self.db is None:
+            return False, "Firebase not initialized. Please configure Firebase in settings."
         
         try:
             # Delete from Firebase Auth
