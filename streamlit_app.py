@@ -124,6 +124,14 @@ except Exception as e:
     MODULE_STATUS['Architecture Patterns'] = False
     MODULE_ERRORS['architecture_patterns'] = str(e)
 
+# WAF Review Module - NEW
+try:
+    from waf_review_module import render_waf_review_tab
+    MODULE_STATUS['WAF Review'] = True
+except Exception as e:
+    MODULE_STATUS['WAF Review'] = False
+    MODULE_ERRORS['waf_review_module'] = str(e)
+
 # ============================================================================
 # STYLES
 # ============================================================================
@@ -775,13 +783,14 @@ def main():
     
     st.markdown(f'<div class="main-header"><div style="display: flex; justify-content: space-between; align-items: center;"><div><h1>🏗️ AWS Well-Architected Framework Advisor</h1><p>Enterprise AI-Powered Architecture Review Platform</p></div><div style="background: {mode_color}; padding: 0.5rem 1rem; border-radius: 20px; color: white; font-weight: 600;">{mode_badge}</div></div></div>', unsafe_allow_html=True)
     
-    # Main tabs - now includes Architecture Patterns
+    # Main tabs - now includes Architecture Patterns and WAF Review
     tabs = st.tabs([
         "📊 Dashboard",
         "🎯 AWS Scanner",
         "📤 Architecture Review",
         "📈 WAF Results",
-        "🏛️ Architecture Patterns",  # NEW TAB
+        "🏗️ WAF Review",  # NEW TAB - Comprehensive Assessment
+        "🏛️ Architecture Patterns",
         "🚀 EKS & Modernization",
         "💰 FinOps",
         "📋 Compliance",
@@ -804,37 +813,56 @@ def main():
     with tabs[3]:
         render_waf_results_tab()
     
-    with tabs[4]:  # NEW TAB
+    with tabs[4]:  # NEW TAB - WAF Review
+        if MODULE_STATUS.get('WAF Review'):
+            render_waf_review_tab()
+        else:
+            st.error(f"❌ WAF Review Module Not Loaded")
+            st.info("💡 To enable WAF Review:")
+            st.code("""
+# 1. Ensure waf_review_module.py is in your project directory
+# 2. Check the error below for details
+            """)
+            if 'waf_review_module' in MODULE_ERRORS:
+                st.error(f"Error: {MODULE_ERRORS['waf_review_module']}")
+    
+    with tabs[5]:  # Architecture Patterns (was tabs[4])
         if MODULE_STATUS.get('Architecture Patterns'):
             render_architecture_patterns_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('architecture_patterns', 'Unknown')}")
     
-    with tabs[5]:
+    with tabs[5]:  # Architecture Patterns (was tabs[4])
+        if MODULE_STATUS.get('Architecture Patterns'):
+            render_architecture_patterns_tab()
+        else:
+            st.error(f"Module error: {MODULE_ERRORS.get('architecture_patterns', 'Unknown')}")
+    
+    with tabs[6]:  # EKS & Modernization (was tabs[5])
         if MODULE_STATUS.get('EKS & Modernization'):
             render_eks_modernization_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('eks_modernization', 'Unknown')}")
     
-    with tabs[6]:
+    with tabs[7]:  # FinOps (was tabs[6])
         if MODULE_STATUS.get('FinOps'):
             render_finops_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('finops_module', 'Unknown')}")
     
-    with tabs[7]:
+    with tabs[8]:  # Compliance (was tabs[7])
         if MODULE_STATUS.get('Compliance'):
             render_compliance_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('compliance_module', 'Unknown')}")
     
-    with tabs[8]:
+    with tabs[9]:  # Migration & DR (was tabs[8])
         if MODULE_STATUS.get('Migration & DR'):
             render_migration_dr_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('migration_dr_module', 'Unknown')}")
     
-    with tabs[9]:
+    with tabs[10]:  # Knowledge Base (was tabs[9])
         render_knowledge_base_tab()
     
     st.markdown('<div class="app-footer">AWS Well-Architected Framework Advisor | Enterprise Edition v2.1 | Powered by Claude AI</div>', unsafe_allow_html=True)
