@@ -1174,7 +1174,12 @@ def render_eks_modernization_tab():
             render_karpenter_guide()
         elif selected_guide == "ArgoCD GitOps Guide":
             render_argocd_guide()
-        # Add other guides as needed
+        elif selected_guide == "Multi-AZ HA Setup":
+            render_multi_az_guide()
+        elif selected_guide == "Spot Instance Strategy":
+            render_spot_strategy_guide()
+        elif selected_guide == "Istio Service Mesh":
+            render_istio_guide()
 
 def render_karpenter_guide():
     """Karpenter implementation guide"""
@@ -1260,6 +1265,669 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.pas
 # Access UI (port-forward)
 kubectl port-forward svc/argocd-server -n argocd 8080:443
         """, language="bash")
+    
+    with st.expander("📋 Create Application"):
+        st.code("""
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/your-repo
+    targetRevision: HEAD
+    path: kubernetes/
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: my-app
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+        """, language="yaml")
+    
+    with st.expander("🔐 Configure Git Repository"):
+        st.markdown("""
+        **Add a Git repository to ArgoCD:**
+        
+        1. Go to Settings > Repositories
+        2. Click "+ Connect Repo"
+        3. Choose connection method (HTTPS or SSH)
+        4. Enter repository URL
+        5. Add credentials if private repository
+        6. Click "Connect"
+        """)
+    
+    with st.expander("📊 Monitor Applications"):
+        st.markdown("""
+        **View application status:**
+        
+        - Access ArgoCD UI at http://localhost:8080
+        - Default credentials: admin / [password from earlier step]
+        - View sync status, health status, and resource tree
+        - Click on resources to see details and logs
+        - Use CLI for automation: `argocd app list`
+        """)
+
+def render_multi_az_guide():
+    """Multi-AZ HA setup guide"""
+    st.markdown("## 🏢 Multi-AZ High Availability Setup")
+    
+    st.markdown("""
+    ### Overview
+    Configure EKS for high availability across multiple Availability Zones (AZs) 
+    to achieve 99.99% uptime and survive AZ failures.
+    
+    ### Architecture Goal
+    - EKS control plane: Managed across 3 AZs by AWS
+    - Node groups: One per AZ for balanced distribution
+    - Storage: Multi-AZ persistent storage (EFS)
+    - Networking: NAT Gateway per AZ for redundancy
+    """)
+    
+    with st.expander("🏗️ Step 1: VPC Configuration", expanded=True):
+        st.markdown("**Create VPC with 3 AZs:**")
+        st.code("""
+# Create VPC with public and private subnets in 3 AZs
+aws ec2 create-vpc --cidr-block 10.0.0.0/16 --tag-specifications 'ResourceType=vpc,Tags=[{Key=Name,Value=eks-vpc}]'
+
+# Create subnets in each AZ
+# Public subnets (for load balancers)
+aws ec2 create-subnet --vpc-id <vpc-id> --cidr-block 10.0.1.0/24 --availability-zone us-east-1a --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=public-1a}]'
+aws ec2 create-subnet --vpc-id <vpc-id> --cidr-block 10.0.2.0/24 --availability-zone us-east-1b --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=public-1b}]'
+aws ec2 create-subnet --vpc-id <vpc-id> --cidr-block 10.0.3.0/24 --availability-zone us-east-1c --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=public-1c}]'
+
+# Private subnets (for EKS nodes)
+aws ec2 create-subnet --vpc-id <vpc-id> --cidr-block 10.0.101.0/24 --availability-zone us-east-1a --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=private-1a}]'
+aws ec2 create-subnet --vpc-id <vpc-id> --cidr-block 10.0.102.0/24 --availability-zone us-east-1b --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=private-1b}]'
+aws ec2 create-subnet --vpc-id <vpc-id> --cidr-block 10.0.103.0/24 --availability-zone us-east-1c --tag-specifications 'ResourceType=subnet,Tags=[{Key=Name,Value=private-1c}]'
+        """, language="bash")
+    
+    with st.expander("🎯 Step 2: Create EKS Cluster"):
+        st.markdown("**Deploy EKS cluster with eksctl:**")
+        st.code("""
+# Create cluster configuration
+cat << EOF > eks-cluster.yaml
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: production-cluster
+  region: us-east-1
+  version: "1.28"
+
+vpc:
+  subnets:
+    private:
+      us-east-1a: { id: subnet-xxx }
+      us-east-1b: { id: subnet-yyy }
+      us-east-1c: { id: subnet-zzz }
+
+managedNodeGroups:
+  - name: ng-1a
+    instanceType: m5.large
+    minSize: 2
+    maxSize: 10
+    availabilityZones: ["us-east-1a"]
+    labels:
+      topology.kubernetes.io/zone: us-east-1a
+    tags:
+      k8s.io/cluster-autoscaler/enabled: "true"
+  
+  - name: ng-1b
+    instanceType: m5.large
+    minSize: 2
+    maxSize: 10
+    availabilityZones: ["us-east-1b"]
+    labels:
+      topology.kubernetes.io/zone: us-east-1b
+    tags:
+      k8s.io/cluster-autoscaler/enabled: "true"
+  
+  - name: ng-1c
+    instanceType: m5.large
+    minSize: 2
+    maxSize: 10
+    availabilityZones: ["us-east-1c"]
+    labels:
+      topology.kubernetes.io/zone: us-east-1c
+    tags:
+      k8s.io/cluster-autoscaler/enabled: "true"
+EOF
+
+# Create cluster
+eksctl create cluster -f eks-cluster.yaml
+        """, language="bash")
+    
+    with st.expander("🛡️ Step 3: Configure Pod Distribution"):
+        st.markdown("**Ensure pods spread across AZs:**")
+        st.code("""
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      # Anti-affinity: Don't schedule multiple pods on same node
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - web
+              topologyKey: kubernetes.io/hostname
+      
+      # Topology spread: Balance across AZs
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: web
+      
+      containers:
+      - name: web
+        image: nginx:latest
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        """, language="yaml")
+    
+    with st.expander("📊 Step 4: Pod Disruption Budgets"):
+        st.markdown("**Protect critical workloads during maintenance:**")
+        st.code("""
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-app-pdb
+spec:
+  minAvailable: 4  # At least 4 pods must remain available
+  selector:
+    matchLabels:
+      app: web
+---
+# Alternative: Use percentage
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-pdb
+spec:
+  maxUnavailable: 25%  # Max 25% of pods can be unavailable
+  selector:
+    matchLabels:
+      app: api
+        """, language="yaml")
+    
+    with st.expander("✅ Step 5: Validation & Testing"):
+        st.markdown("""
+        **Validate HA Configuration:**
+        
+        1. **Check pod distribution:**
+        ```bash
+        kubectl get pods -o wide | awk '{print $1, $7}' | sort -k2
+        ```
+        
+        2. **Simulate AZ failure:**
+        ```bash
+        # Cordon all nodes in one AZ
+        kubectl cordon <node-in-az-a>
+        
+        # Watch pods reschedule
+        kubectl get pods -w
+        
+        # Verify application still accessible
+        curl https://your-app.example.com
+        ```
+        
+        3. **Test during node upgrades:**
+        ```bash
+        # Upgrade nodes one AZ at a time
+        eksctl upgrade nodegroup --cluster=production-cluster --name=ng-1a
+        ```
+        
+        4. **Monitor availability:**
+        ```bash
+        # Check if PDBs are preventing disruptions
+        kubectl get pdb
+        kubectl describe pdb web-app-pdb
+        ```
+        """)
+    
+    st.success("✅ **Result:** Your cluster can survive AZ failures with zero downtime!")
+
+def render_spot_strategy_guide():
+    """Spot instance strategy guide"""
+    st.markdown("## 💰 Spot Instance Strategy for EKS")
+    
+    st.markdown("""
+    ### Overview
+    Reduce compute costs by 60-90% using EC2 Spot Instances with intelligent 
+    diversification and interruption handling.
+    
+    ### Strategy
+    - **Mix:** 10-20% On-Demand (critical) + 80-90% Spot (workloads)
+    - **Diversification:** 10+ instance types across 3 AZs
+    - **Automation:** Karpenter for intelligent provisioning
+    """)
+    
+    with st.expander("📊 Step 1: Analyze Workload Suitability", expanded=True):
+        st.markdown("""
+        **Categorize your workloads:**
+        
+        | Workload Type | Spot Suitability | Strategy |
+        |---------------|------------------|----------|
+        | Stateless web apps | ✅ High | 70-90% Spot |
+        | Batch processing | ✅ High | 100% Spot |
+        | CI/CD pipelines | ✅ High | 100% Spot |
+        | Databases | ⚠️ Medium | On-Demand only |
+        | Auth services | ❌ Low | On-Demand only |
+        | Monitoring | ❌ Low | On-Demand only |
+        
+        **Use this command to analyze current capacity:**
+        """)
+        st.code("""
+# Get current node types and counts
+kubectl get nodes -o json | jq '.items[] | {name: .metadata.name, type: .metadata.labels["node.kubernetes.io/instance-type"], zone: .metadata.labels["topology.kubernetes.io/zone"]}'
+
+# Get pod counts per node
+kubectl get pods --all-namespaces -o wide | awk '{print $8}' | sort | uniq -c
+        """, language="bash")
+    
+    with st.expander("🎯 Step 2: Install Karpenter"):
+        st.markdown("**Karpenter handles Spot diversification automatically:**")
+        st.code("""
+# Install Karpenter
+export CLUSTER_NAME=your-cluster
+export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+helm repo add karpenter https://charts.karpenter.sh
+helm repo update
+
+helm install karpenter karpenter/karpenter \\
+  --namespace karpenter \\
+  --create-namespace \\
+  --set serviceAccount.annotations."eks\\.amazonaws\\.com/role-arn"=arn:aws:iam::${AWS_ACCOUNT_ID}:role/KarpenterController \\
+  --set settings.clusterName=${CLUSTER_NAME} \\
+  --set settings.clusterEndpoint=$(aws eks describe-cluster --name ${CLUSTER_NAME} --query "cluster.endpoint" --output text) \\
+  --wait
+        """, language="bash")
+    
+    with st.expander("⚙️ Step 3: Configure Spot-Heavy NodePool"):
+        st.markdown("**Create Karpenter provisioner with Spot focus:**")
+        st.code("""
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: spot-optimized
+spec:
+  template:
+    spec:
+      requirements:
+        # Prefer Spot, fallback to On-Demand if needed
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"]
+        
+        # Support both x86 and ARM for maximum availability
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64", "arm64"]
+        
+        # Multiple instance families for diversification
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: ["c", "m", "r"]  # Compute, General, Memory
+        
+        # Modern generations only (5+)
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: ["5"]
+        
+        # Size range
+        - key: karpenter.k8s.aws/instance-size
+          operator: In
+          values: ["large", "xlarge", "2xlarge"]
+      
+      nodeClassRef:
+        name: default
+  
+  # Cost-saving features
+  disruption:
+    consolidationPolicy: WhenUnderutilized
+    consolidateAfter: 30s
+  
+  # Set limits
+  limits:
+    cpu: 1000
+    memory: 1000Gi
+  
+  # Prioritize Spot
+  weight: 10
+---
+apiVersion: karpenter.k8s.aws/v1beta1
+kind: EC2NodeClass
+metadata:
+  name: default
+spec:
+  amiFamily: AL2
+  role: KarpenterNodeRole
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: ${CLUSTER_NAME}
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: ${CLUSTER_NAME}
+  
+  # Configure Spot interruption handling
+  instanceStorePolicy: RAID0
+        """, language="yaml")
+    
+    with st.expander("🛡️ Step 4: Handle Spot Interruptions"):
+        st.markdown("**Set up graceful termination:**")
+        st.code("""
+# 1. Configure graceful shutdown in your deployments
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+spec:
+  template:
+    spec:
+      terminationGracePeriodSeconds: 120  # Give time to finish requests
+      containers:
+      - name: app
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/bin/sh", "-c", "sleep 15"]  # Wait for deregistration
+        
+        # Readiness probe to stop receiving traffic
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 3
+
+---
+# 2. Use AWS Node Termination Handler (for 2-minute warnings)
+kubectl apply -f https://github.com/aws/aws-node-termination-handler/releases/download/v1.19.0/all-resources.yaml
+        """, language="yaml")
+    
+    with st.expander("📈 Step 5: Monitor Spot Savings"):
+        st.markdown("""
+        **Track your savings:**
+        
+        1. **Check Spot interruption rates:**
+        ```bash
+        # View interruption events
+        kubectl get events --all-namespaces | grep -i spot
+        
+        # Check node ages (short ages = more interruptions)
+        kubectl get nodes -o custom-columns=NAME:.metadata.name,AGE:.metadata.creationTimestamp
+        ```
+        
+        2. **Calculate savings:**
+        ```bash
+        # Compare Spot vs On-Demand costs
+        # Spot: ~$0.03/hr for c5.large
+        # On-Demand: ~$0.085/hr for c5.large
+        # Savings: 65%
+        ```
+        
+        3. **Use Kubecost for detailed tracking:**
+        ```bash
+        helm install kubecost kubecost/cost-analyzer \\
+          --namespace kubecost --create-namespace
+        
+        # Access at: http://localhost:9090
+        kubectl port-forward -n kubecost svc/kubecost-cost-analyzer 9090:9090
+        ```
+        """)
+    
+    st.success("✅ **Expected Savings:** 60-90% reduction in compute costs!")
+    
+    st.info("""
+    **💡 Pro Tips:**
+    - Start with 50% Spot, gradually increase to 80-90%
+    - Always keep critical services (auth, monitoring) on On-Demand
+    - Use AWS Spot Instance Advisor to check interruption rates
+    - Test interruptions in dev before production: `kubectl drain <node>`
+    """)
+
+def render_istio_guide():
+    """Istio service mesh guide"""
+    st.markdown("## 🕸️ Istio Service Mesh Implementation")
+    
+    st.markdown("""
+    ### Overview
+    Implement Istio for advanced traffic management, security, and observability 
+    in microservices architectures.
+    
+    ### When to Use Istio
+    ✅ **Good fit:**
+    - 50+ microservices
+    - Need advanced traffic routing (canary, A/B testing)
+    - Strong security requirements (mTLS)
+    - Multiple teams managing services
+    
+    ⚠️ **Not recommended for:**
+    - Small applications (< 10 services)
+    - Teams without Kubernetes experience
+    - Cost-sensitive environments (10-15% overhead)
+    """)
+    
+    with st.expander("🚀 Step 1: Install Istio", expanded=True):
+        st.markdown("**Install using istioctl:**")
+        st.code("""
+# Download Istio
+curl -L https://istio.io/downloadIstio | sh -
+cd istio-*
+export PATH=$PWD/bin:$PATH
+
+# Install with demo profile (for learning)
+istioctl install --set profile=demo -y
+
+# Or production profile (for real deployments)
+istioctl install --set profile=production -y
+
+# Verify installation
+kubectl get pods -n istio-system
+        """, language="bash")
+    
+    with st.expander("🏷️ Step 2: Enable Sidecar Injection"):
+        st.markdown("**Label namespaces for automatic injection:**")
+        st.code("""
+# Enable injection for a namespace
+kubectl label namespace default istio-injection=enabled
+
+# Verify label
+kubectl get namespace -L istio-injection
+
+# Restart existing pods to inject sidecars
+kubectl rollout restart deployment -n default
+
+# Check if sidecars are injected
+kubectl get pods -n default -o jsonpath='{range .items[*]}{.metadata.name}{"\\t"}{.spec.containers[*].name}{"\\n"}{end}'
+        """, language="bash")
+    
+    with st.expander("🔐 Step 3: Configure mTLS"):
+        st.markdown("**Enable mutual TLS between services:**")
+        st.code("""
+# Start with permissive mode (allows both mTLS and plain text)
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: PERMISSIVE
+---
+# After testing, switch to strict mode
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: STRICT
+
+# Verify mTLS is working
+istioctl authn tls-check <pod-name>.<namespace> <service-name>.<namespace>.svc.cluster.local
+        """, language="yaml")
+    
+    with st.expander("🚦 Step 4: Traffic Management - Canary Deployment"):
+        st.markdown("**Gradually shift traffic to new version:**")
+        st.code("""
+# Define VirtualService for canary routing
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: reviews
+spec:
+  hosts:
+  - reviews
+  http:
+  - match:
+    - headers:
+        user-agent:
+          regex: ".*Chrome.*"  # Chrome users get v2
+    route:
+    - destination:
+        host: reviews
+        subset: v2
+  - route:  # Everyone else
+    - destination:
+        host: reviews
+        subset: v1
+      weight: 90  # 90% to v1
+    - destination:
+        host: reviews
+        subset: v2
+      weight: 10  # 10% to v2
+---
+# Define DestinationRule with subsets
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: reviews
+spec:
+  host: reviews
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2
+        """, language="yaml")
+    
+    with st.expander("📊 Step 5: Observability with Kiali"):
+        st.markdown("**Install and access Kiali dashboard:**")
+        st.code("""
+# Install Kiali, Prometheus, Grafana, Jaeger
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/kiali.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/prometheus.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/grafana.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/jaeger.yaml
+
+# Wait for pods to be ready
+kubectl rollout status deployment/kiali -n istio-system
+
+# Access Kiali
+kubectl port-forward svc/kiali -n istio-system 20001:20001
+
+# Open browser: http://localhost:20001
+        """, language="bash")
+    
+    with st.expander("🔍 Step 6: Circuit Breaking"):
+        st.markdown("**Prevent cascading failures:**")
+        st.code("""
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: httpbin
+spec:
+  host: httpbin
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 50
+        http2MaxRequests: 100
+        maxRequestsPerConnection: 2
+    outlierDetection:
+      consecutiveErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+        """, language="yaml")
+    
+    with st.expander("✅ Step 7: Testing & Validation"):
+        st.markdown("""
+        **Verify Istio is working:**
+        
+        1. **Check service mesh status:**
+        ```bash
+        istioctl analyze
+        istioctl proxy-status
+        ```
+        
+        2. **Generate test traffic:**
+        ```bash
+        # Deploy sample app
+        kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/bookinfo/platform/kube/bookinfo.yaml
+        
+        # Access it
+        kubectl port-forward svc/productpage 9080:9080
+        ```
+        
+        3. **View in Kiali:**
+        - Open Kiali dashboard
+        - Go to Graph → Select namespace
+        - Generate traffic and watch service graph
+        - Check traffic distribution for canary
+        
+        4. **Check mTLS:**
+        ```bash
+        istioctl authn tls-check productpage-v1-xxx.default reviews.default.svc.cluster.local
+        ```
+        """)
+    
+    st.warning("""
+    **⚠️ Resource Impact:**
+    - CPU: +10-15% per pod (Envoy sidecar)
+    - Memory: +50-100MB per pod
+    - Latency: +1-2ms per hop
+    
+    **Budget accordingly:** Add 20% capacity buffer
+    """)
+    
+    st.success("✅ **You now have a production-grade service mesh!**")
 
 # Export
 __all__ = ['render_eks_modernization_tab']
