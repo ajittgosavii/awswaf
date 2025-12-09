@@ -16,6 +16,8 @@ Features:
 - Evidence collection and management
 """
 
+from __future__ import annotations
+
 import streamlit as st
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any
