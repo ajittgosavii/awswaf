@@ -443,8 +443,8 @@ def render_sidebar():
         st.markdown("""
         <div style="text-align: center; padding: 1rem 0;">
             <img src="https://a0.awsstatic.com/libra-css/images/logos/aws_smile-header-desktop-en-white_59x35.png" width="60">
-            <h3 style="color: #FF9900; margin: 0.5rem 0 0 0; font-size: 1rem;">Well-Architected Advisor</h3>
-            <p style="color: #666; font-size: 0.75rem; margin: 0;">Enterprise Edition v2.2</p>
+            <h3 style="color: #FF9900; margin: 0.5rem 0 0 0; font-size: 1rem; font-weight: 700;">Well-Architected Advisor</h3>
+            <p style="color: #232F3E; font-size: 0.85rem; margin: 0; font-weight: 600;">Enterprise Edition v2.2</p>
         </div>
         """, unsafe_allow_html=True)
         
