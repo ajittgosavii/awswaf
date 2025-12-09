@@ -595,20 +595,34 @@ def render_user_list():
         return
     
     # Sort by creation date (handle None and missing values)
-    # Convert all values to datetime objects for proper comparison
+    # Convert all values to comparable timestamps
     def get_sort_datetime(user):
-        created_at = user.get('created_at')
-        if created_at is None:
-            return datetime(1970, 1, 1)  # Default for missing dates
-        if isinstance(created_at, str):
-            try:
-                return datetime.fromisoformat(created_at)
-            except:
-                return datetime(1970, 1, 1)
-        # Handle Firebase DatetimeWithNanoseconds or datetime objects
-        return created_at
+        try:
+            created_at = user.get('created_at')
+            if created_at is None:
+                return 0  # Use timestamp 0 for missing dates
+            if isinstance(created_at, str):
+                try:
+                    dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    return dt.timestamp()
+                except:
+                    return 0
+            # Handle Firebase DatetimeWithNanoseconds or datetime objects
+            # Convert to timestamp for consistent comparison
+            if hasattr(created_at, 'timestamp'):
+                return created_at.timestamp()
+            # If it has a method to convert to datetime
+            if hasattr(created_at, 'astimezone'):
+                return created_at.timestamp()
+            return 0
+        except Exception as e:
+            return 0  # Fallback to 0 if any error occurs
     
-    users.sort(key=get_sort_datetime, reverse=True)
+    try:
+        users.sort(key=get_sort_datetime, reverse=True)
+    except Exception as e:
+        st.warning(f"Could not sort users by date: {str(e)}")
+        # Users will remain in original order
     
     # Add search/filter
     col_search, col_filter = st.columns([3, 1])
