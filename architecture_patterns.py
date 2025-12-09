@@ -1012,9 +1012,25 @@ def render_patterns_section():
     
     with col1:
         st.markdown("**Select Pattern:**")
-        for key, pattern in ARCHITECTURE_PATTERNS.items():
-            if st.button(f"{pattern['icon']} {pattern['name']}", key=f"pattern_{key}", use_container_width=True):
-                st.session_state.selected_pattern = key
+        # Use radio buttons to avoid duplicate key errors
+        pattern_options = [f"{pattern['icon']} {pattern['name']}" for key, pattern in ARCHITECTURE_PATTERNS.items()]
+        pattern_keys = list(ARCHITECTURE_PATTERNS.keys())
+        
+        # Get current selection index
+        current_key = st.session_state.get('selected_pattern', 'microservices')
+        current_index = pattern_keys.index(current_key) if current_key in pattern_keys else 0
+        
+        selected_index = st.radio(
+            "Choose a pattern:",
+            range(len(pattern_options)),
+            format_func=lambda i: pattern_options[i],
+            index=current_index,
+            key="pattern_selector",
+            label_visibility="collapsed"
+        )
+        
+        # Update session state
+        st.session_state.selected_pattern = pattern_keys[selected_index]
     
     with col2:
         selected = st.session_state.get('selected_pattern', 'microservices')

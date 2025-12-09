@@ -783,7 +783,7 @@ def main():
     
     st.markdown(f'<div class="main-header"><div style="display: flex; justify-content: space-between; align-items: center;"><div><h1>🏗️ AWS Well-Architected Framework Advisor</h1><p>Enterprise AI-Powered Architecture Review Platform</p></div><div style="background: {mode_color}; padding: 0.5rem 1rem; border-radius: 20px; color: white; font-weight: 600;">{mode_badge}</div></div></div>', unsafe_allow_html=True)
     
-    # Main tabs - now includes Architecture Patterns and WAF Review
+    # Main tabs - streamlined with WAF Review
     tabs = st.tabs([
         "📊 Dashboard",
         "🎯 AWS Scanner",
@@ -792,10 +792,8 @@ def main():
         "🏗️ WAF Review",  # NEW TAB - Comprehensive Assessment
         "🏛️ Architecture Patterns",
         "🚀 EKS & Modernization",
-        "💰 FinOps",
         "📋 Compliance",
-        "🔄 Migration & DR",
-        "📚 Knowledge Base"
+        "🔄 Migration & DR"
     ])
     
     with tabs[0]:
@@ -844,28 +842,19 @@ def main():
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('eks_modernization', 'Unknown')}")
     
-    with tabs[7]:  # FinOps (was tabs[6])
-        if MODULE_STATUS.get('FinOps'):
-            render_finops_tab()
-        else:
-            st.error(f"Module error: {MODULE_ERRORS.get('finops_module', 'Unknown')}")
-    
-    with tabs[8]:  # Compliance (was tabs[7])
+    with tabs[7]:  # Compliance (was tabs[7])
         if MODULE_STATUS.get('Compliance'):
             render_compliance_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('compliance_module', 'Unknown')}")
     
-    with tabs[9]:  # Migration & DR (was tabs[8])
+    with tabs[8]:  # Migration & DR (was tabs[8])
         if MODULE_STATUS.get('Migration & DR'):
             render_migration_dr_tab()
         else:
             st.error(f"Module error: {MODULE_ERRORS.get('migration_dr_module', 'Unknown')}")
     
-    with tabs[10]:  # Knowledge Base (was tabs[9])
-        render_knowledge_base_tab()
-    
-    st.markdown('<div class="app-footer">AWS Well-Architected Framework Advisor | Enterprise Edition v2.1 | Powered by Claude AI</div>', unsafe_allow_html=True)
+    st.markdown('<div class="app-footer">AWS Well-Architected Framework Advisor | Enterprise Edition v2.2 | Powered by Claude AI</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
