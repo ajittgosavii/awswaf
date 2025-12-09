@@ -19,8 +19,11 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 import json
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError
 
 # ============================================================================
 # AWS COST OPTIMIZATION FRAMEWORK
@@ -687,11 +690,17 @@ class AWSCostExplorerIntegration:
                 'currency': 'USD'
             }
             
-        except ClientError as e:
+        except (ClientError, NoCredentialsError) as e:
             return {
                 'success': False,
                 'error': str(e),
                 'message': 'Unable to fetch AWS cost data. Ensure Cost Explorer is enabled and credentials are configured.'
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'message': 'An unexpected error occurred while fetching cost data.'
             }
     
     @staticmethod
@@ -735,7 +744,12 @@ class AWSCostExplorerIntegration:
                 'period': f'Last {days} days'
             }
             
-        except ClientError as e:
+        except (ClientError, NoCredentialsError) as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+        except Exception as e:
             return {
                 'success': False,
                 'error': str(e)
@@ -771,7 +785,12 @@ class AWSCostExplorerIntegration:
                 'currency': 'USD'
             }
             
-        except ClientError as e:
+        except (ClientError, NoCredentialsError) as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+        except Exception as e:
             return {
                 'success': False,
                 'error': str(e)
@@ -814,7 +833,12 @@ class AWSCostExplorerIntegration:
                 'error': 'No coverage data available'
             }
             
-        except ClientError as e:
+        except (ClientError, NoCredentialsError) as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+        except Exception as e:
             return {
                 'success': False,
                 'error': str(e)
@@ -893,21 +917,27 @@ def render_cost_dashboard():
             st.info("Configure AWS credentials in the Account Management section")
     
     # Try to fetch real data
-    cost_data = AWSCostExplorerIntegration.get_monthly_costs()
-    
-    if cost_data['success']:
-        st.success("✅ Successfully connected to AWS Cost Explorer")
+    try:
+        cost_data = AWSCostExplorerIntegration.get_monthly_costs()
         
-        # Display cost breakdown
-        monthly_data = cost_data['data']
-        
-        # Top services chart
-        st.markdown("### 💰 Top AWS Services by Cost")
-        # Implementation continues...
-        
-    else:
-        st.warning("⚠️ Using demo data. Connect AWS for real-time insights.")
-        # Show demo data
+        if cost_data.get('success'):
+            st.success("✅ Successfully connected to AWS Cost Explorer")
+            
+            # Display cost breakdown
+            monthly_data = cost_data['data']
+            
+            # Top services chart
+            st.markdown("### 💰 Top AWS Services by Cost")
+            # Implementation continues with real data...
+            render_real_cost_data(monthly_data)
+        else:
+            st.warning("⚠️ Using demo data. Connect AWS for real-time insights.")
+            render_demo_cost_data()
+            
+    except Exception as e:
+        # Handle any AWS credential or connection errors
+        st.warning("⚠️ AWS credentials not configured. Showing demo data.")
+        st.caption("To see real data, configure AWS credentials in Streamlit secrets or environment variables")
         render_demo_cost_data()
 
 def render_optimization_strategies():
@@ -1070,13 +1100,70 @@ def render_forecasting():
     else:
         st.warning("Connect AWS to see real forecasts")
 
+def render_real_cost_data(monthly_data):
+    """Render real AWS cost data from Cost Explorer"""
+    import pandas as pd
+    import plotly.express as px
+    
+    # Extract latest month data
+    latest_month = max(monthly_data.keys())
+    services = monthly_data[latest_month]['services']
+    total = monthly_data[latest_month]['total']
+    
+    # Top metrics
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Current Month Cost", f"${total:,.2f}")
+    with col2:
+        # Calculate month-over-month change
+        months = sorted(monthly_data.keys())
+        if len(months) >= 2:
+            prev_month = months[-2]
+            prev_total = monthly_data[prev_month]['total']
+            change = ((total - prev_total) / prev_total * 100) if prev_total > 0 else 0
+            st.metric("Month-over-Month", f"{change:+.1f}%")
+    with col3:
+        # Top service
+        top_service = max(services.items(), key=lambda x: x[1])
+        st.metric("Top Service", f"{top_service[0]}: ${top_service[1]:,.2f}")
+    
+    # Services breakdown chart
+    df = pd.DataFrame(list(services.items()), columns=['Service', 'Cost'])
+    df = df.sort_values('Cost', ascending=False).head(10)
+    
+    fig = px.bar(df, x='Service', y='Cost', title='Top 10 AWS Services by Cost')
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Cost trend over time
+    trend_data = []
+    for month in sorted(monthly_data.keys()):
+        trend_data.append({
+            'Month': month,
+            'Total Cost': monthly_data[month]['total']
+        })
+    
+    trend_df = pd.DataFrame(trend_data)
+    fig2 = px.line(trend_df, x='Month', y='Total Cost', title='Cost Trend Over Time', markers=True)
+    st.plotly_chart(fig2, use_container_width=True)
+
 def render_demo_cost_data():
     """Render demo cost data when AWS is not connected"""
+    import pandas as pd
+    import plotly.express as px
+    
     st.markdown("### 💰 Demo Cost Data")
     st.markdown("*This is sample data. Connect your AWS account for real insights.*")
     
-    # Demo data
-    import pandas as pd
+    # Demo metrics
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Monthly Cost", "$4,280", delta="+12%")
+    with col2:
+        st.metric("Top Service", "EC2: $1,250")
+    with col3:
+        st.metric("Savings Opportunity", "$1,200", delta="-28%")
+    
+    # Demo services
     demo_services = {
         "EC2": 1250,
         "RDS": 680,
@@ -1084,11 +1171,36 @@ def render_demo_cost_data():
         "Data Transfer": 310,
         "Lambda": 180,
         "EKS": 150,
-        "CloudWatch": 90
+        "CloudWatch": 90,
+        "VPC": 85,
+        "EBS": 75,
+        "Route 53": 40
     }
     
     df = pd.DataFrame(list(demo_services.items()), columns=['Service', 'Cost'])
-    st.bar_chart(df.set_index('Service'))
+    df = df.sort_values('Cost', ascending=False)
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        fig = px.bar(df, x='Service', y='Cost', title='Monthly Cost by Service (Demo Data)',
+                     color='Cost', color_continuous_scale='Blues')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    
+    # Demo trend
+    st.markdown("### 📈 Cost Trend (Demo)")
+    trend_data = pd.DataFrame({
+        'Month': ['Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+        'Cost': [3800, 3950, 4100, 4280, 4450]
+    })
+    fig2 = px.line(trend_data, x='Month', y='Cost', title='6-Month Cost Trend', markers=True)
+    st.plotly_chart(fig2, use_container_width=True)
+    
+    st.info("💡 Configure AWS credentials to see your actual cost data and get personalized recommendations")
+
 
 # Export main function
 __all__ = ['render_finops_tab']
