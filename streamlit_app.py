@@ -60,10 +60,14 @@ def initialize_firebase():
                 st.warning("⚠️ Firebase not configured. Running in non-authenticated mode.")
                 return
             
+            # Get Firebase config - web_config is optional for server-side only auth
             config = {
-                'service_account_key': dict(st.secrets['firebase']['service_account_key']),
-                'web_config': dict(st.secrets['firebase']['web_config'])
+                'service_account_key': dict(st.secrets['firebase']['service_account_key'])
             }
+            
+            # Add web_config only if present (needed for client-side auth like Google Sign-In)
+            if 'web_config' in st.secrets['firebase']:
+                config['web_config'] = dict(st.secrets['firebase']['web_config'])
             
             success, message = firebase_manager.initialize_firebase(config)
             

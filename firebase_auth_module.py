@@ -17,6 +17,7 @@ from typing import Dict, List, Optional, Tuple
 import json
 import hashlib
 import uuid
+import requests  # For Firebase REST API calls
 
 # Firebase Admin SDK (install: pip install firebase-admin)
 try:
@@ -94,7 +95,7 @@ class FirebaseAuthManager:
         Initialize Firebase with service account credentials
         
         Args:
-            config: Firebase configuration with service_account_key and web_config
+            config: Firebase configuration with service_account_key and optional web_config
             
         Returns:
             (success, message)
@@ -103,7 +104,7 @@ class FirebaseAuthManager:
             return True, "Already initialized"
         
         try:
-            # Initialize Firebase Admin SDK
+            # Initialize Firebase Admin SDK (required)
             if FIREBASE_ADMIN_AVAILABLE:
                 if not firebase_admin._apps:
                     cred = credentials.Certificate(config['service_account_key'])
@@ -114,11 +115,13 @@ class FirebaseAuthManager:
                 self.db = firestore.client()
                 self.initialized = True
             
-            # Initialize Pyrebase for client-side operations
-            if PYREBASE_AVAILABLE:
+            # Initialize Pyrebase for client-side operations (optional)
+            # Only needed if you want Google Sign-In or client-side auth
+            if PYREBASE_AVAILABLE and 'web_config' in config:
                 firebase_config = config.get('web_config', {})
-                firebase = pyrebasex.initialize_app(firebase_config)
-                self.auth_client = firebase.auth()
+                if firebase_config:  # Only initialize if web_config provided
+                    firebase = pyrebasex.initialize_app(firebase_config)
+                    self.auth_client = firebase.auth()
             
             return True, "Firebase initialized successfully"
             
@@ -172,20 +175,62 @@ class FirebaseAuthManager:
     
     def sign_in_with_email(self, email: str, password: str) -> Tuple[bool, str, Optional[Dict]]:
         """
-        Sign in user with email and password
+        Sign in user with email and password (server-side authentication)
+        Requires Firebase Web API Key for password verification
         
         Returns:
             (success, message, user_info)
         """
-        if not PYREBASE_AVAILABLE:
-            return False, "Pyrebase not available", None
+        if not FIREBASE_ADMIN_AVAILABLE:
+            return False, "Firebase Admin SDK not available", None
         
         try:
-            # Authenticate with Firebase
-            user = self.auth_client.sign_in_with_email_and_password(email, password)
+            # For password verification, we need the Web API Key
+            # You can get this from Firebase Console > Project Settings > General
+            api_key = None
+            
+            # Try to get API key from secrets
+            try:
+                import streamlit as st
+                if hasattr(st, 'secrets') and 'firebase' in st.secrets:
+                    # Check for api_key in firebase section
+                    if 'api_key' in st.secrets['firebase']:
+                        api_key = st.secrets['firebase']['api_key']
+                    # Or in web_config if provided
+                    elif 'web_config' in st.secrets['firebase'] and 'apiKey' in st.secrets['firebase']['web_config']:
+                        api_key = st.secrets['firebase']['web_config']['apiKey']
+            except:
+                pass
+            
+            if not api_key:
+                return False, "Firebase API key not configured. Add 'api_key' to secrets.toml", None
+            
+            # Verify password using Firebase REST API
+            import requests
+            url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
+            payload = {
+                "email": email,
+                "password": password,
+                "returnSecureToken": True
+            }
+            
+            response = requests.post(url, json=payload)
+            
+            if response.status_code != 200:
+                error_data = response.json()
+                error_message = error_data.get('error', {}).get('message', '')
+                
+                if 'INVALID_PASSWORD' in error_message or 'INVALID_EMAIL' in error_message:
+                    return False, "Invalid email or password", None
+                elif 'EMAIL_NOT_FOUND' in error_message:
+                    return False, "User not found", None
+                else:
+                    return False, f"Login failed: {error_message}", None
+            
+            result = response.json()
+            uid = result['localId']
             
             # Get user profile from Firestore
-            uid = user['localId']
             user_doc = self.db.collection('users').document(uid).get()
             
             if not user_doc.exists:
@@ -207,20 +252,14 @@ class FirebaseAuthManager:
                 'email': user_data['email'],
                 'display_name': user_data['display_name'],
                 'role': user_data['role'],
-                'token': user['idToken'],
-                'refresh_token': user['refreshToken']
+                'token': result['idToken'],
+                'refresh_token': result.get('refreshToken')
             }
             
             return True, "Login successful", session_data
             
         except Exception as e:
-            error_message = str(e)
-            if "INVALID_PASSWORD" in error_message or "INVALID_EMAIL" in error_message:
-                return False, "Invalid email or password", None
-            elif "EMAIL_NOT_FOUND" in error_message:
-                return False, "User not found", None
-            else:
-                return False, f"Login failed: {error_message}", None
+            return False, f"Login failed: {str(e)}", None
     
     def sign_in_with_google(self) -> Tuple[bool, str, Optional[Dict]]:
         """
@@ -319,13 +358,44 @@ class FirebaseAuthManager:
             return False, f"Error deleting user: {str(e)}"
     
     def reset_password(self, email: str) -> Tuple[bool, str]:
-        """Send password reset email"""
-        if not PYREBASE_AVAILABLE:
-            return False, "Pyrebase not available"
+        """Send password reset email using Firebase Admin SDK"""
+        if not FIREBASE_ADMIN_AVAILABLE:
+            return False, "Firebase Admin SDK not available"
         
         try:
-            self.auth_client.send_password_reset_email(email)
-            return True, f"Password reset email sent to {email}"
+            # Get API key for password reset
+            import streamlit as st
+            api_key = None
+            
+            try:
+                if hasattr(st, 'secrets') and 'firebase' in st.secrets:
+                    if 'api_key' in st.secrets['firebase']:
+                        api_key = st.secrets['firebase']['api_key']
+                    elif 'web_config' in st.secrets['firebase'] and 'apiKey' in st.secrets['firebase']['web_config']:
+                        api_key = st.secrets['firebase']['web_config']['apiKey']
+            except:
+                pass
+            
+            if not api_key:
+                return False, "Firebase API key not configured for password reset"
+            
+            # Use Firebase REST API to send password reset email
+            import requests
+            url = f"https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={api_key}"
+            payload = {
+                "requestType": "PASSWORD_RESET",
+                "email": email
+            }
+            
+            response = requests.post(url, json=payload)
+            
+            if response.status_code == 200:
+                return True, f"Password reset email sent to {email}"
+            else:
+                error_data = response.json()
+                error_message = error_data.get('error', {}).get('message', 'Unknown error')
+                return False, f"Error sending reset email: {error_message}"
+            
         except Exception as e:
             return False, f"Error sending reset email: {str(e)}"
     
