@@ -665,32 +665,94 @@ def render_dashboard_tab(assessment: Dict):
             """, unsafe_allow_html=True)
 
 def render_assessment_tab(assessment: Dict):
-    """Render assessment questions"""
-    st.markdown("### 📝 Assessment Questions")
+    """Render assessment questions with AI assistance - KEY DIFFERENTIATOR"""
+    st.markdown("### 📝 Assessment Questions with AI Assistant")
     
     questions = get_complete_waf_questions()
     
-    # Pillar filter
-    pillar_filter = st.selectbox(
-        "Select Pillar",
-        ["All"] + [p.value for p in Pillar],
-        key="pillar_filter"
-    )
+    # Header with AI tips button
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        pillar_filter = st.selectbox(
+            "Select Pillar",
+            ["All"] + [p.value for p in Pillar],
+            key="pillar_filter"
+        )
+    with col2:
+        if st.button("💡 AI Tips", help="Get AI-powered guidance"):
+            st.session_state.show_ai_tips = not st.session_state.get('show_ai_tips', False)
+    with col3:
+        show_count = st.number_input("Show", min_value=5, max_value=50, value=10, step=5)
+    
+    # AI Tips panel
+    if st.session_state.get('show_ai_tips', False):
+        st.info("""
+        **🤖 AI Assistant Features - Your Competitive Advantage:**
+        - **🎯 Simplified Explanations**: Understand complex questions easily
+        - **💡 Smart Recommendations**: Get personalized answer suggestions
+        - **📚 Real Examples**: See how others implement best practices
+        - **🛠️ Action Steps**: Get practical implementation guidance
+        - **✨ Context-Aware**: Tailored to your specific workload
+        
+        *This AI assistance is NOT available in AWS's native WAF Tool!*
+        """)
     
     # Filter questions
     filtered_questions = questions
     if pillar_filter != "All":
         filtered_questions = [q for q in questions if q.pillar.value == pillar_filter]
     
-    st.info(f"📋 Showing {len(filtered_questions)} questions")
+    st.info(f"📋 Showing {len(filtered_questions)} questions | 🤖 AI Assistant available for all questions")
     
     # Render questions
-    for idx, question in enumerate(filtered_questions[:10]):  # Show first 10 for demo
+    for idx, question in enumerate(filtered_questions[:show_count]):
         with st.expander(f"{question.pillar.icon} {question.id}: {question.text}"):
             st.markdown(f"**Category:** {question.category}")
             st.markdown(question.description)
             
-            st.markdown("---")
+            # AI Assistant Button - PROMINENT PLACEMENT
+            col_ai, col_space = st.columns([1, 3])
+            with col_ai:
+                if st.button(f"🤖 Get AI Help", key=f"ai_help_{question.id}", use_container_width=True, type="secondary"):
+                    with st.spinner("🤖 AI is analyzing this question for you..."):
+                        ai_assistance = get_ai_question_assistance(question, assessment)
+                        if ai_assistance:
+                            st.session_state[f"ai_assist_{question.id}"] = ai_assistance
+                            st.success("✅ AI analysis complete!")
+            
+            # Show AI assistance if available
+            if f"ai_assist_{question.id}" in st.session_state:
+                ai_help = st.session_state[f"ai_assist_{question.id}"]
+                st.markdown("---")
+                
+                st.markdown("### 🤖 AI Assistant Analysis")
+                st.caption("*Personalized guidance powered by Claude AI*")
+                
+                # Tabs for different AI insights
+                ai_tabs = st.tabs(["📖 Explanation", "💡 Why It Matters", "✅ Recommendation", "📚 Example", "🛠️ Steps"])
+                
+                with ai_tabs[0]:
+                    st.markdown("**Simplified Explanation:**")
+                    st.info(ai_help.get('simplified_explanation', 'Processing...'))
+                
+                with ai_tabs[1]:
+                    st.markdown("**Business Impact:**")
+                    st.success(ai_help.get('why_matters', 'Processing...'))
+                
+                with ai_tabs[2]:
+                    st.markdown("**AI Recommendation:**")
+                    st.warning(ai_help.get('recommendation', 'Processing...'))
+                
+                with ai_tabs[3]:
+                    st.markdown("**Real-World Example:**")
+                    st.markdown(ai_help.get('example', 'Processing...'))
+                
+                with ai_tabs[4]:
+                    st.markdown("**Implementation Steps:**")
+                    st.markdown(ai_help.get('implementation_steps', 'Processing...'))
+                
+                st.markdown("---")
+            
             st.markdown("**Select your answer:**")
             
             # Response selection
@@ -705,14 +767,20 @@ def render_assessment_tab(assessment: Dict):
                 index=current_response.get('choice_index', 0) if current_response else 0
             )
             
+            # Show guidance for selected choice
+            if selected_choice is not None:
+                st.caption(f"💬 **Guidance:** {question.choices[selected_choice].guidance}")
+            
             # Notes
             notes = st.text_area(
-                "Notes (Optional)",
+                "Additional Notes & Evidence",
                 value=current_response.get('notes', ''),
-                key=f"notes_{question.id}"
+                key=f"notes_{question.id}",
+                placeholder="Add context, evidence, or observations that support your answer...",
+                height=100
             )
             
-            if st.button("💾 Save Response", key=f"save_{question.id}"):
+            if st.button("💾 Save Response", key=f"save_{question.id}", use_container_width=True, type="primary"):
                 if 'responses' not in assessment:
                     assessment['responses'] = {}
                 
@@ -722,15 +790,141 @@ def render_assessment_tab(assessment: Dict):
                     'risk_level': question.choices[selected_choice].risk_level.label,
                     'points': question.choices[selected_choice].points,
                     'notes': notes,
-                    'timestamp': datetime.now().isoformat()
+                    'timestamp': datetime.now().isoformat(),
+                    'ai_assisted': f"ai_assist_{question.id}" in st.session_state  # Track AI usage
                 }
                 
                 # Update progress
-                assessment['progress'] = int((len(assessment['responses']) / 205) * 100)
+                total_questions = len(questions)
+                assessment['progress'] = int((len(assessment['responses']) / total_questions) * 100)
                 assessment['updated_at'] = datetime.now().isoformat()
                 
-                st.success("✅ Response saved!")
+                # Track AI assistance usage
+                if f"ai_assist_{question.id}" in st.session_state:
+                    if 'ai_assistance_used' not in assessment:
+                        assessment['ai_assistance_used'] = 0
+                    assessment['ai_assistance_used'] += 1
+                    del st.session_state[f"ai_assist_{question.id}"]
+                
+                st.success("✅ Response saved successfully!")
                 st.rerun()
+
+def get_ai_question_assistance(question: Question, assessment: Dict) -> Optional[Dict]:
+    """
+    Get AI-powered assistance for understanding and answering questions.
+    
+    THIS IS THE KEY DIFFERENTIATOR FROM AWS'S NATIVE WAF TOOL:
+    - Simplifies complex questions into plain language
+    - Provides context-specific recommendations
+    - Offers real-world examples
+    - Gives actionable implementation steps
+    - Tailored to the user's specific workload
+    
+    AWS's tool just shows questions - we provide intelligent guidance!
+    """
+    if not ANTHROPIC_AVAILABLE:
+        return {
+            'simplified_explanation': "AI assistance requires the Anthropic library. Install with: pip install anthropic",
+            'why_matters': "This question is part of AWS best practices for well-architected workloads.",
+            'recommendation': "Review the answer choices and select based on your current implementation.",
+            'example': "Consider how this applies to your specific use case.",
+            'implementation_steps': "• Review current state\n• Compare to best practices\n• Plan improvements"
+        }
+    
+    try:
+        # Get API key
+        api_key = None
+        if hasattr(st, 'secrets'):
+            if 'ANTHROPIC_API_KEY' in st.secrets:
+                api_key = st.secrets['ANTHROPIC_API_KEY']
+            elif 'anthropic' in st.secrets:
+                api_key = st.secrets['anthropic'].get('api_key')
+        
+        if not api_key:
+            return {
+                'simplified_explanation': "To enable AI assistance, add your Anthropic API key to Streamlit secrets.",
+                'why_matters': "This question helps ensure your architecture follows AWS best practices.",
+                'recommendation': "Review your current implementation and select the answer that best matches.",
+                'example': "Consider your specific requirements when answering.",
+                'implementation_steps': "• Add ANTHROPIC_API_KEY to .streamlit/secrets.toml\n• Restart the application\n• Click AI Help again"
+            }
+        
+        client = anthropic.Anthropic(api_key=api_key)
+        
+        # Build context-aware prompt
+        workload_context = f"""
+Workload Name: {assessment.get('workload_name', 'Not specified')}
+Assessment Type: {assessment.get('type', 'Not specified')}
+Organization: {assessment.get('name', 'Not specified')}
+AWS Account: {assessment.get('aws_account', 'Not specified')}
+"""
+        
+        prompt = f"""You are an expert AWS Solutions Architect helping users complete a Well-Architected Framework assessment.
+
+QUESTION DETAILS:
+- ID: {question.id}
+- Pillar: {question.pillar.value}
+- Category: {question.category}
+- Question: {question.text}
+- Description: {question.description}
+
+WORKLOAD CONTEXT:
+{workload_context}
+
+BEST PRACTICES:
+{chr(10).join(f"- {bp}" for bp in question.best_practices)}
+
+ANSWER CHOICES:
+{chr(10).join(f"{i+1}. {choice.text} ({choice.risk_level.label} risk, {choice.points} points)" for i, choice in enumerate(question.choices))}
+
+Provide a JSON response with these exact keys:
+
+{{
+  "simplified_explanation": "2-3 sentences explaining this question in simple, non-technical language that a business user can understand",
+  "why_matters": "2-3 sentences explaining the real business impact - why should they care about this? What happens if they get it wrong?",
+  "recommendation": "3-4 sentences recommending which answer choice is likely best for their workload and explaining why, based on the context provided",
+  "example": "A concrete 4-5 sentence real-world example (anonymized) showing how a company addressed this area successfully or failed to address it",
+  "implementation_steps": "4-6 bullet points (using • prefix) with practical, actionable steps they can take to improve in this area"
+}}
+
+Be conversational, practical, and avoid jargon. Focus on actionable advice."""
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2000,
+            temperature=0.7,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        # Parse response
+        import json
+        import re
+        
+        text = response.content[0].text
+        
+        # Try to extract JSON
+        json_match = re.search(r'\{[\s\S]*\}', text)
+        if json_match:
+            result = json.loads(json_match.group())
+            return result
+        else:
+            # Fallback
+            return {
+                'simplified_explanation': "This question assesses a critical aspect of your AWS architecture.",
+                'why_matters': "Following best practices in this area reduces risk and improves reliability.",
+                'recommendation': "Evaluate your current implementation against the answer choices provided.",
+                'example': "Organizations that implement these practices see improved outcomes.",
+                'implementation_steps': "• Review current state\n• Identify gaps\n• Create action plan\n• Implement improvements"
+            }
+    
+    except Exception as e:
+        return {
+            'simplified_explanation': f"AI assistance temporarily unavailable: {str(e)[:100]}",
+            'why_matters': "This question is important for AWS best practices.",
+            'recommendation': "Review the answer choices and select based on your implementation.",
+            'example': "Consider your specific use case.",
+            'implementation_steps': "• Review documentation\n• Assess current state\n• Plan improvements"
+        }
 
 def render_ai_insights_tab(assessment: Dict):
     """Render AI-powered insights"""
