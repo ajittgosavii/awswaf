@@ -1898,9 +1898,21 @@ def render_landscape_scanner_tab():
             
             assessment = generate_demo_assessment()
         else:
+            # Get session and validate it exists
             session = st.session_state.get('aws_session')
-            scanner = AWSLandscapeScanner(session)
-            assessment = scanner.run_scan(regions, lambda p, m: (progress.progress(p), status.text(m)))
+            
+            if not session:
+                st.error("❌ AWS session not found. Please connect to AWS in the AWS Connector tab first.")
+                return
+            
+            # Create scanner with validated session
+            try:
+                scanner = AWSLandscapeScanner(session)
+                assessment = scanner.run_scan(regions, lambda p, m: (progress.progress(p), status.text(m)))
+            except Exception as e:
+                st.error(f"❌ Scan failed: {str(e)}")
+                st.info("💡 Try reconnecting in the AWS Connector tab or switch to Demo mode")
+                return
         
         st.session_state.landscape_assessment = assessment
         
