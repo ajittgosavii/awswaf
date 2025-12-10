@@ -301,11 +301,19 @@ class AnthropicAIValidator:
     def _initialize_client(self) -> str:
         """Initialize Anthropic client from Streamlit secrets"""
         try:
-            # Try to get API key from secrets
-            api_key = st.secrets.get("ANTHROPIC_API_KEY")
+            # Try to get API key from secrets - supports both formats
+            api_key = None
+            
+            # Try format 1: [anthropic] section (user's format)
+            if "anthropic" in st.secrets:
+                api_key = st.secrets["anthropic"].get("ANTHROPIC_API_KEY")
+            
+            # Try format 2: root level (if not found in section)
+            if not api_key:
+                api_key = st.secrets.get("ANTHROPIC_API_KEY")
             
             if not api_key:
-                return "❌ ANTHROPIC_API_KEY not found in secrets"
+                return "❌ ANTHROPIC_API_KEY not found in secrets (tried [anthropic] section and root level)"
             
             if not api_key.startswith("sk-ant-"):
                 return "❌ Invalid ANTHROPIC_API_KEY format in secrets"
