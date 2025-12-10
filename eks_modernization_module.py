@@ -1522,6 +1522,13 @@ def render_documentation_export():
         st.info("Complete the Design Wizard first to export documentation")
 
 # ============================================================================
+# COMPATIBILITY ALIAS
+# ============================================================================
+
+# Alias for backward compatibility with streamlit_app.py
+render_eks_modernization_hub = render_eks_design_hub
+
+# ============================================================================
 # ENTRY POINT
 # ============================================================================
 
