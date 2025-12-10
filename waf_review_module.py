@@ -883,11 +883,13 @@ def run_aws_scan(assessment: Dict):
                     scan_results = {
                         'findings': [
                             {
-                                'service': f.service.lower(),
+                                'service': f.source_service.lower(),  # Fixed: source_service not service
                                 'severity': f.severity,
-                                'message': f.message,
+                                'message': f.description,  # Fixed: description not message
                                 'recommendation': f.recommendation,
-                                'pillar': f.pillar
+                                'pillar': f.pillar,
+                                'title': f.title,
+                                'affected_resources': f.affected_resources
                             } for f in landscape_assessment.findings
                         ],
                         'resources': {
@@ -1315,11 +1317,13 @@ def run_standalone_scan(aws_account: str, region: str):
                     scan_results = {
                         'findings': [
                             {
-                                'service': f.service.lower(),
+                                'service': f.source_service.lower(),  # Fixed: source_service not service
                                 'severity': f.severity,
-                                'message': f.message,
+                                'message': f.description,  # Fixed: description not message
                                 'recommendation': f.recommendation,
-                                'pillar': f.pillar
+                                'pillar': f.pillar,
+                                'title': f.title,
+                                'affected_resources': f.affected_resources
                             } for f in landscape_assessment.findings
                         ],
                         'resources': {
