@@ -786,17 +786,48 @@ def render_user_statistics():
     
     # Recent logins
     st.markdown("#### Recent Activity")
+    
+    # Helper function to get sortable timestamp
+    def get_timestamp(user):
+        last_login = user.get('last_login')
+        if not last_login:
+            return 0
+        # Handle DatetimeWithNanoseconds from Firestore
+        if hasattr(last_login, 'timestamp'):
+            return last_login.timestamp()
+        # Handle string datetime
+        if isinstance(last_login, str):
+            try:
+                from datetime import datetime
+                return datetime.fromisoformat(last_login.replace('Z', '+00:00')).timestamp()
+            except:
+                return 0
+        return 0
+    
     recent_users = sorted(
         [u for u in users if u.get('last_login')],
-        key=lambda x: x.get('last_login') or '1970-01-01',
+        key=get_timestamp,
         reverse=True
     )[:5]
     
     if recent_users:
         for user in recent_users:
             display_name = user.get('display_name') or 'Unknown User'
-            last_login = user.get('last_login') or 'N/A'
-            last_login_display = last_login[:16] if isinstance(last_login, str) else 'N/A'
+            last_login = user.get('last_login')
+            
+            # Format last_login for display
+            if last_login:
+                if hasattr(last_login, 'strftime'):
+                    # DatetimeWithNanoseconds or datetime object
+                    last_login_display = last_login.strftime('%Y-%m-%d %H:%M')
+                elif isinstance(last_login, str):
+                    # String datetime
+                    last_login_display = last_login[:16] if len(last_login) >= 16 else last_login
+                else:
+                    last_login_display = 'N/A'
+            else:
+                last_login_display = 'N/A'
+            
             st.markdown(f"- **{display_name}** - {last_login_display}")
     else:
         st.info("No recent activity")
