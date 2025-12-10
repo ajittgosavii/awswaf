@@ -33,6 +33,18 @@ try:
 except ImportError:
     pass
 
+# Import EKS Integrations for Real Pricing and AI
+EKS_INTEGRATIONS_AVAILABLE = False
+try:
+    from eks_integrations import (
+        AWSPricingFetcher,
+        AnthropicAIValidator,
+        display_integration_status
+    )
+    EKS_INTEGRATIONS_AVAILABLE = True
+except ImportError:
+    pass
+
 # ============================================================================
 # DATA MODELS FOR EKS ARCHITECTURE
 # ============================================================================
@@ -740,7 +752,23 @@ class EKSDesignWizard:
         # Cost Estimation
         st.divider()
         st.subheader("💰 Cost Estimation")
-        cost_estimate = CostEstimator.calculate_total_cost(spec)
+        
+        # Show integration status
+        if EKS_INTEGRATIONS_AVAILABLE:
+            with st.expander("🔌 Pricing & AI Integration Status", expanded=False):
+                display_integration_status()
+        
+        # Calculate costs
+        estimator = CostEstimator()
+        cost_estimate = estimator.calculate_total_cost(spec)
+        
+        # Show pricing source
+        if 'pricing_source' in cost_estimate:
+            if cost_estimate.get('is_real_data', False):
+                st.success(f"✅ Using real pricing from: {cost_estimate['pricing_source']}")
+            else:
+                st.info(f"ℹ️ Using: {cost_estimate['pricing_source']}")
+                st.caption("💡 Configure AWS credentials in .streamlit/secrets.toml for real-time pricing")
         
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Monthly Cost", f"${cost_estimate['total']:,.2f}")
@@ -756,17 +784,22 @@ class EKSDesignWizard:
         st.divider()
         st.subheader("🤖 AI-Powered Architecture Validation")
         
-        if ANTHROPIC_AVAILABLE and st.secrets.get("ANTHROPIC_API_KEY"):
+        # Initialize validator (auto-loads from secrets)
+        validator = AIArchitectureValidator()
+        
+        if validator.available:
+            st.success(f"{validator.status_message}")
+            
             if st.button("🔍 Validate Architecture with AI", type="primary", use_container_width=True):
                 with st.spinner("🤖 AI analyzing your architecture..."):
-                    validator = AIArchitectureValidator(st.secrets["ANTHROPIC_API_KEY"])
                     validation_results = validator.validate_architecture(spec)
                     st.session_state.validation_results = validation_results
             
             if st.session_state.validation_results:
                 EKSDesignWizard._display_validation_results(st.session_state.validation_results)
         else:
-            st.info("💡 Configure ANTHROPIC_API_KEY in Streamlit secrets for AI-powered validation")
+            st.info(f"💡 {validator.status_message}")
+            st.caption("Configure ANTHROPIC_API_KEY in .streamlit/secrets.toml to enable AI validation")
             
             # Show basic validation without AI
             basic_validation = BasicValidator.validate(spec)
@@ -916,44 +949,94 @@ class SizingCalculator:
 # ============================================================================
 
 class CostEstimator:
-    """Calculate total cost of EKS architecture"""
+    """Calculate total cost of EKS architecture with real AWS pricing"""
     
-    @staticmethod
-    def calculate_total_cost(spec: EKSDesignSpec) -> Dict[str, float]:
-        """Calculate total monthly cost"""
+    def __init__(self):
+        """Initialize with real pricing fetcher if available"""
+        self.pricing = None
+        if EKS_INTEGRATIONS_AVAILABLE:
+            try:
+                self.pricing = AWSPricingFetcher()
+            except Exception as e:
+                st.warning(f"Could not initialize pricing fetcher: {e}")
+    
+    def calculate_total_cost(self, spec: EKSDesignSpec) -> Dict[str, float]:
+        """Calculate total monthly cost with real or fallback pricing"""
         
-        # EKS Control Plane
+        # EKS Control Plane (standard pricing)
         eks_control_plane = 73.00
         
-        # Compute Cost
+        # Compute Cost - Use real pricing if available
         compute_cost = 0
-        if spec.karpenter_enabled:
-            # Estimate based on peak pods
-            node_count = max(3, spec.peak_pod_count // 58)
-            avg_instance_cost = 140.16  # m5.xlarge
-            compute_cost = node_count * avg_instance_cost
-            
-            # Apply Spot savings if enabled
-            if spec.karpenter_config.get('spot_enabled'):
-                spot_pct = spec.karpenter_config.get('spot_percentage', 70) / 100
-                savings = compute_cost * spot_pct * 0.70
-                compute_cost -= savings
+        pricing_source = "Fallback Estimates"
         
-        for ng in spec.node_groups:
-            instance_cost = SizingCalculator.INSTANCE_SPECS.get(
-                ng['instance_type'], 
-                {'cost': 140.16}
-            )['cost']
+        if self.pricing:
+            # Use real AWS pricing
+            try:
+                for ng in spec.node_groups:
+                    result = self.pricing.get_ec2_pricing(
+                        instance_type=ng['instance_type'],
+                        region=spec.region
+                    )
+                    
+                    if ng['capacity_type'] == 'SPOT':
+                        instance_cost = result['monthly_spot_avg']
+                    else:
+                        instance_cost = result['monthly_on_demand']
+                    
+                    compute_cost += instance_cost * ng['desired_size']
+                
+                pricing_source = result.get('source', 'AWS Pricing API')
+                
+            except Exception as e:
+                # Fall through to fallback calculation
+                self.pricing = None
+        
+        if not self.pricing or compute_cost == 0:
+            # Fallback to hardcoded estimates
+            for ng in spec.node_groups:
+                instance_cost = SizingCalculator.INSTANCE_SPECS.get(
+                    ng['instance_type'], 
+                    {'cost': 140.16}
+                )['cost']
+                
+                if ng['capacity_type'] == 'SPOT':
+                    instance_cost *= 0.3  # 70% savings
+                
+                compute_cost += instance_cost * ng['desired_size']
+        
+        # Karpenter cost estimation
+        if spec.karpenter_enabled:
+            node_count = max(3, spec.peak_pod_count // 58)
             
-            if ng['capacity_type'] == 'SPOT':
-                instance_cost *= 0.3  # 70% savings
-            
-            compute_cost += instance_cost * ng['desired_size']
+            if self.pricing:
+                try:
+                    # Use real pricing for Karpenter nodes
+                    avg_instance = spec.karpenter_config.get('instance_type', 'm5.xlarge')
+                    result = self.pricing.get_ec2_pricing(avg_instance, spec.region)
+                    
+                    if spec.karpenter_config.get('spot_enabled'):
+                        avg_cost = result['monthly_spot_avg']
+                    else:
+                        avg_cost = result['monthly_on_demand']
+                    
+                    compute_cost += node_count * avg_cost
+                except:
+                    # Fallback
+                    avg_cost = 140.16  # m5.xlarge estimate
+                    if spec.karpenter_config.get('spot_enabled'):
+                        avg_cost *= 0.3
+                    compute_cost += node_count * avg_cost
+            else:
+                # Fallback
+                avg_cost = 140.16
+                if spec.karpenter_config.get('spot_enabled'):
+                    avg_cost *= 0.3
+                compute_cost += node_count * avg_cost
         
         # Storage Cost
         storage_cost = 0
         if spec.ebs_csi_enabled:
-            # Assume 50GB per node
             node_count = max(3, len(spec.node_groups) * 2)
             storage_cost += (50 * node_count * 0.10)  # $0.10/GB for gp3
         
@@ -980,7 +1063,9 @@ class CostEstimator:
             'eks_control_plane': eks_control_plane,
             'compute': compute_cost,
             'storage': storage_cost,
-            'network': network_cost
+            'network': network_cost,
+            'pricing_source': pricing_source,
+            'is_real_data': pricing_source == 'AWS Pricing API'
         }
 
 # ============================================================================
@@ -988,85 +1073,76 @@ class CostEstimator:
 # ============================================================================
 
 class AIArchitectureValidator:
-    """AI-powered architecture validation using Claude"""
+    """AI-powered architecture validation using Claude (auto-loads from secrets)"""
     
-    def __init__(self, api_key: str):
-        self.client = Anthropic(api_key=api_key) if ANTHROPIC_AVAILABLE else None
+    def __init__(self):
+        """Initialize validator - loads API key from secrets automatically"""
+        self.validator = None
+        self.available = False
+        self.status_message = ""
+        
+        if EKS_INTEGRATIONS_AVAILABLE:
+            try:
+                self.validator = AnthropicAIValidator()
+                self.available = "✅" in self.validator.api_key_status
+                self.status_message = self.validator.api_key_status
+            except Exception as e:
+                self.status_message = f"❌ Could not initialize AI validator: {e}"
+        else:
+            self.status_message = "⚠️ EKS integrations not available"
     
     def validate_architecture(self, spec: EKSDesignSpec) -> Dict:
         """Validate architecture and provide recommendations"""
         
-        if not self.client:
-            return {'error': 'Anthropic client not available'}
+        if not self.available:
+            return {
+                'status': 'unavailable',
+                'error': 'AI validation unavailable',
+                'message': self.status_message,
+                'recommendations': []
+            }
         
-        # Prepare architecture summary
-        arch_summary = self._prepare_summary(spec)
-        
-        prompt = f"""You are an AWS EKS expert architect. Analyze this EKS architecture design and provide detailed validation:
-
-Architecture Specification:
-{json.dumps(arch_summary, indent=2)}
-
-Please provide:
-1. Overall architecture score (0-100)
-2. Risk level (Low/Medium/High/Critical)
-3. Production readiness assessment
-4. Top 10 prioritized recommendations (CRITICAL, HIGH, MEDIUM, LOW)
-5. Specific issues or concerns
-6. Cost optimization opportunities
-7. Security improvements
-8. Performance optimizations
-9. Operational excellence suggestions
-
-Respond in JSON format:
-{{
-  "overall_score": <0-100>,
-  "risk_level": "Low|Medium|High|Critical",
-  "readiness": "Production Ready|Needs Improvements|Not Ready",
-  "recommendations": [
-    {{
-      "priority": "CRITICAL|HIGH|MEDIUM|LOW",
-      "category": "Cost|Security|Performance|Reliability|Operations",
-      "title": "...",
-      "description": "...",
-      "action": "specific action to take",
-      "impact": "expected impact"
-    }}
-  ],
-  "issues": [
-    {{
-      "severity": "Critical|High|Medium|Low",
-      "description": "...",
-      "remediation": "..."
-    }}
-  ],
-  "strengths": ["..."],
-  "cost_optimization": {{
-    "potential_savings": "$X/month",
-    "recommendations": ["..."]
-  }}
-}}"""
+        # Create comprehensive configuration for validation
+        config = {
+            'project_name': spec.project_name,
+            'environment': spec.environment,
+            'region': spec.region,
+            'availability_zones': len(spec.availability_zones),
+            'node_groups': len(spec.node_groups),
+            'karpenter_enabled': spec.karpenter_enabled,
+            'fargate_profiles': len(spec.fargate_profiles),
+            'workload_count': spec.expected_workloads,
+            'peak_pods': spec.peak_pod_count,
+            'k8s_version': '1.28',
+            'security': {
+                'encryption': spec.encryption_enabled,
+                'irsa': spec.irsa_enabled,
+                'pod_security': spec.pod_security_standards,
+                'network_policies': spec.network_policies
+            },
+            'observability': {
+                'logging': spec.logging_enabled,
+                'prometheus': spec.prometheus_enabled,
+                'grafana': spec.grafana_enabled
+            },
+            'networking': {
+                'vpc_cidr': spec.vpc_cidr,
+                'subnet_strategy': spec.subnet_strategy,
+                'load_balancer': spec.load_balancer_type,
+                'service_mesh': spec.service_mesh
+            }
+        }
         
         try:
-            response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=4000,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            
-            # Parse response
-            content = response.content[0].text
-            # Extract JSON from response
-            import re
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group())
-                return result
-            else:
-                return {'error': 'Could not parse AI response'}
-                
+            result = self.validator.validate_configuration(config)
+            return result
         except Exception as e:
-            return {'error': str(e)}
+            return {
+                'status': 'error',
+                'error': f'Validation failed: {str(e)}',
+                'message': 'AI validation encountered an error',
+                'recommendations': []
+            }
     
     def _prepare_summary(self, spec: EKSDesignSpec) -> Dict:
         """Prepare architecture summary for AI"""
