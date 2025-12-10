@@ -2168,14 +2168,18 @@ def render_cost_calculator_tab():
     
     col1, col2 = st.columns(2)
     with col1:
+        region = st.selectbox("Region", ['us-east-1', 'us-east-2', 'us-west-1', 'us-west-2', 'eu-west-1'], index=0)
         instance = st.selectbox("Instance", ['t3.medium', 't3.large', 'm5.xlarge', 'c5.xlarge'])
         count = st.number_input("Nodes", 1, 500, 10)
     
     with col2:
-        pricing = calc.get_ec2_pricing(instance)
+        pricing = calc.get_ec2_pricing(instance, region)
         monthly = pricing['monthly_on_demand'] * count + 73
         st.metric("Monthly (On-Demand)", f"${monthly:,.2f}")
-        st.metric("Monthly (70% Spot)", f"${(pricing['monthly_on_demand']*0.3 + pricing['monthly_spot_avg']*0.7)*count + 73:,.2f}")
+        spot_monthly = (pricing['monthly_on_demand']*0.3 + pricing['monthly_spot_avg']*0.7)*count + 73
+        st.metric("Monthly (70% Spot)", f"${spot_monthly:,.2f}", 
+                 delta=f"-${monthly - spot_monthly:,.2f}")
+        st.caption(f"Spot savings: {pricing['spot_savings_percent']:.1f}%")
 
 def render_cluster_analysis_tab():
     """Cluster analysis UI"""
