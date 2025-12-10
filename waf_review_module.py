@@ -2280,13 +2280,18 @@ def get_ai_question_assistance(question: Question, assessment: Dict) -> Optional
         }
     
     try:
-        # Get API key
+        # Get API key - supports multiple formats
         api_key = None
         if hasattr(st, 'secrets'):
+            # Format 1: Root level ANTHROPIC_API_KEY
             if 'ANTHROPIC_API_KEY' in st.secrets:
                 api_key = st.secrets['ANTHROPIC_API_KEY']
+            # Format 2: [anthropic] section with ANTHROPIC_API_KEY (user's format)
             elif 'anthropic' in st.secrets:
-                api_key = st.secrets['anthropic'].get('api_key')
+                if 'ANTHROPIC_API_KEY' in st.secrets['anthropic']:
+                    api_key = st.secrets['anthropic']['ANTHROPIC_API_KEY']
+                elif 'api_key' in st.secrets['anthropic']:
+                    api_key = st.secrets['anthropic']['api_key']
         
         if not api_key:
             return {
