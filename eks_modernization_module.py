@@ -23,9 +23,16 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 import pandas as pd
-from anthropic import Anthropic
 import plotly.graph_objects as go
 import plotly.express as px
+
+# Try to import Anthropic (optional)
+ANTHROPIC_AVAILABLE = False
+try:
+    from anthropic import Anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    pass
 
 # ============================================================================
 # DATA MODELS
@@ -1576,13 +1583,20 @@ class AIRecommendationsEngine:
     
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or st.secrets.get("ANTHROPIC_API_KEY", "")
-        if self.api_key:
+        self.client = None
+        if self.api_key and ANTHROPIC_AVAILABLE:
             self.client = Anthropic(api_key=self.api_key)
     
     def analyze_cluster_configuration(self, cluster_data: Dict) -> Dict:
         """Analyze cluster config and provide AI recommendations"""
         
-        if not self.api_key:
+        if not ANTHROPIC_AVAILABLE:
+            return {
+                'error': 'Anthropic library not installed',
+                'recommendations': []
+            }
+        
+        if not self.api_key or not self.client:
             return {
                 'error': 'Anthropic API key not configured',
                 'recommendations': []
