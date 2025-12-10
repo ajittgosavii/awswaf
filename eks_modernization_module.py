@@ -612,6 +612,73 @@ spec:
         ]
     
     @staticmethod
+    def get_configuration_patterns() -> Dict[str, Dict]:
+        """Get pre-defined configuration patterns for common workload types"""
+        
+        return {
+            'web_application': {
+                'name': '🌐 Web Application',
+                'description': 'Optimized for web services with variable traffic patterns',
+                'workload_type': 'web-app',
+                'spot_enabled': True,
+                'spot_percentage': 70,
+                'instance_families': ['m5', 'c5', 'r5'],
+                'expected_savings': '35-45%',
+                'use_cases': [
+                    'Web servers and APIs',
+                    'Microservices',
+                    'Frontend applications',
+                    'Load-tolerant services'
+                ]
+            },
+            'batch_processing': {
+                'name': '⚡ Batch Processing',
+                'description': 'Maximum cost savings for fault-tolerant batch workloads',
+                'workload_type': 'batch',
+                'spot_enabled': True,
+                'spot_percentage': 100,
+                'instance_families': ['c5', 'c6i', 'm5'],
+                'expected_savings': '50-60%',
+                'use_cases': [
+                    'Data processing pipelines',
+                    'ETL jobs',
+                    'Video encoding',
+                    'ML training jobs'
+                ]
+            },
+            'stateful_services': {
+                'name': '💾 Stateful Services',
+                'description': 'Reliable configuration for databases and stateful apps',
+                'workload_type': 'stateful',
+                'spot_enabled': False,
+                'spot_percentage': 0,
+                'instance_families': ['r5', 'r6i', 'm5'],
+                'expected_savings': '20-30%',
+                'use_cases': [
+                    'Databases',
+                    'Message queues',
+                    'Caching layers',
+                    'Stateful applications'
+                ]
+            },
+            'gpu_workloads': {
+                'name': '🎮 GPU Workloads',
+                'description': 'Optimized for ML/AI with mixed Spot and On-Demand',
+                'workload_type': 'gpu',
+                'spot_enabled': True,
+                'spot_percentage': 60,
+                'instance_families': ['p3', 'p4', 'g4dn', 'g5'],
+                'expected_savings': '60-70%',
+                'use_cases': [
+                    'ML model training',
+                    'AI inference',
+                    'Video rendering',
+                    'Scientific computing'
+                ]
+            }
+        }
+    
+    @staticmethod
     def get_best_practices() -> List[Dict]:
         """Karpenter best practices and recommendations"""
         
