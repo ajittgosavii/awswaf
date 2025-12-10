@@ -408,17 +408,28 @@ def init_session_state():
             st.session_state.aws_connected = True
 
 def get_api_key() -> Optional[str]:
-    """Get Anthropic API key"""
+    """Get Anthropic API key - supports multiple secret formats"""
+    # Check session state first
     if st.session_state.get('anthropic_api_key'):
         return st.session_state.anthropic_api_key
+    
     try:
         if hasattr(st, 'secrets'):
+            # Format 1: Root level ANTHROPIC_API_KEY
             if 'ANTHROPIC_API_KEY' in st.secrets:
                 return st.secrets['ANTHROPIC_API_KEY']
+            
+            # Format 2: [anthropic] section with ANTHROPIC_API_KEY (user's format)
             if 'anthropic' in st.secrets:
-                return st.secrets['anthropic'].get('api_key')
+                if 'ANTHROPIC_API_KEY' in st.secrets['anthropic']:
+                    return st.secrets['anthropic']['ANTHROPIC_API_KEY']
+                # Also check lowercase variant
+                if 'api_key' in st.secrets['anthropic']:
+                    return st.secrets['anthropic']['api_key']
     except:
         pass
+    
+    # Fallback to environment variable
     return os.environ.get('ANTHROPIC_API_KEY')
 
 def get_anthropic_client():
