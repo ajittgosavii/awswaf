@@ -863,9 +863,17 @@ def run_aws_scan(assessment: Dict):
     with st.spinner("🔍 Scanning AWS environment... This may take 1-2 minutes"):
         try:
             if AWS_INTEGRATION:
-                # Try real AWS scan
-                scanner = AWSLandscapeScanner()
-                scan_results = scanner.scan_all()
+                # Get AWS session from session state
+                session = st.session_state.get('aws_session')
+                
+                if not session:
+                    st.error("❌ AWS session not found. Please connect to AWS in the AWS Connector tab first.")
+                    st.info("💡 Using demo data instead")
+                    scan_results = generate_demo_scan_results()
+                else:
+                    # Try real AWS scan with valid session
+                    scanner = AWSLandscapeScanner(session)
+                    scan_results = scanner.scan_all()
             else:
                 # Use demo data
                 scan_results = generate_demo_scan_results()
@@ -1249,8 +1257,17 @@ def run_standalone_scan(aws_account: str, region: str):
     with st.spinner("🔍 Scanning AWS environment..."):
         try:
             if AWS_INTEGRATION:
-                scanner = AWSLandscapeScanner()
-                scan_results = scanner.scan_all()
+                # Get AWS session from session state
+                session = st.session_state.get('aws_session')
+                
+                if not session:
+                    st.error("❌ AWS session not found. Please connect to AWS in the AWS Connector tab first.")
+                    st.info("💡 Using demo data instead")
+                    scan_results = generate_demo_scan_results()
+                else:
+                    # Try real AWS scan with valid session
+                    scanner = AWSLandscapeScanner(session)
+                    scan_results = scanner.scan_all()
             else:
                 scan_results = generate_demo_scan_results()
             
