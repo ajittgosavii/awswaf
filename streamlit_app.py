@@ -1116,7 +1116,350 @@ def render_dr_strategy():
         st.success("✅ RTO achieved: 2.5 hours (target: < 4 hours)")
         st.warning("⚠️ RPO missed: 75 minutes (target: < 60 min)")
         st.info("💡 Recommendation: Increase backup frequency")
+# ============================================================================
+# ADD THIS TO YOUR streamlit_app.py
+# Copy this entire section to your streamlit_app.py file
+# ============================================================================
 
+"""
+Integration code for EKS Modernization Module and Firebase Auth
+Place this after your existing imports but before your main() function
+"""
+
+# ============================================================================
+# SECTION 1: MODULE IMPORTS (Add after your existing imports)
+# ============================================================================
+
+# Firebase Auth Module
+try:
+    from firebase_auth_module import (
+        FirebaseAuthManager,
+        render_login_page,
+        render_admin_user_management,
+        render_user_profile_sidebar,
+        check_authentication,
+        require_admin,
+        has_permission
+    )
+    FIREBASE_AVAILABLE = True
+except Exception as e:
+    FIREBASE_AVAILABLE = False
+    print(f"⚠️ Firebase module error: {str(e)}")
+
+# EKS Modernization Module
+EKS_AVAILABLE = False
+EKS_ERROR = None
+
+try:
+    from eks_modernization_module import render_eks_modernization_hub
+    EKS_AVAILABLE = True
+    print("✅ EKS Modernization module loaded successfully")
+except ImportError as e:
+    EKS_ERROR = f"Module not found: {str(e)}\nEnsure eks_modernization_module.py is in your project directory"
+    print(f"⚠️ EKS module not available: {EKS_ERROR}")
+except Exception as e:
+    EKS_ERROR = f"Error loading module: {str(e)}"
+    print(f"❌ EKS module error: {EKS_ERROR}")
+
+# EKS Sizing Module (Optional)
+EKS_SIZING_AVAILABLE = False
+try:
+    from eks_sizing_and_components import (
+        render_eks_sizing_framework,
+        render_component_selection_guide,
+        render_integrated_transformation_roadmap
+    )
+    EKS_SIZING_AVAILABLE = True
+    print("✅ EKS Sizing module loaded successfully")
+except:
+    print("ℹ️ EKS Sizing module not available (optional)")
+
+
+# ============================================================================
+# SECTION 2: HELPER FUNCTION FOR EKS MODULE STATUS
+# ============================================================================
+
+def show_eks_module_status():
+    """Display EKS module loading status in sidebar"""
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown("### 🔌 Module Status")
+        
+        # Firebase Status
+        if FIREBASE_AVAILABLE:
+            st.markdown("✅ Firebase Auth")
+        else:
+            st.markdown("❌ Firebase Auth")
+        
+        # EKS Status
+        if EKS_AVAILABLE:
+            st.markdown("✅ EKS Modernization")
+        else:
+            st.markdown("❌ EKS Modernization")
+            if st.checkbox("Show EKS Error Details"):
+                st.code(EKS_ERROR or "Unknown error", language="text")
+                st.info("""
+                **To fix:**
+                1. Ensure `eks_modernization_module.py` is in your project root
+                2. Install dependencies: `pip install anthropic plotly pandas boto3`
+                3. Restart the app
+                """)
+        
+        # Sizing Module Status
+        if EKS_SIZING_AVAILABLE:
+            st.markdown("✅ EKS Sizing (Optional)")
+        else:
+            st.markdown("ℹ️ EKS Sizing (Not loaded)")
+
+
+# ============================================================================
+# SECTION 3: UPDATED main() FUNCTION TEMPLATE
+# ============================================================================
+
+def main():
+    """
+    Main application entry point
+    Modify your existing main() function to include EKS tabs
+    """
+    
+    # Page config (if not already set)
+    st.set_page_config(
+        page_title="AWS WAF Advisor & EKS Hub",
+        page_icon="🛡️",
+        layout="wide"
+    )
+    
+    # Initialize Firebase (if using Firebase auth)
+    if FIREBASE_AVAILABLE:
+        if 'firebase_manager' not in st.session_state:
+            st.session_state.firebase_manager = FirebaseAuthManager()
+            # Initialize Firebase with your config
+            # st.session_state.firebase_manager.initialize_firebase(config)
+    
+    # Check authentication (if using Firebase)
+    if FIREBASE_AVAILABLE and not check_authentication():
+        render_login_page()
+        return
+    
+    # App title
+    st.title("🛡️ AWS Security & Modernization Platform")
+    
+    # Show module status (optional)
+    if st.sidebar.checkbox("Show System Status", value=False):
+        show_eks_module_status()
+    
+    # ========================================================================
+    # TAB CONFIGURATION - CUSTOMIZE THIS SECTION
+    # ========================================================================
+    
+    # Build tab list dynamically based on available modules
+    tab_list = [
+        "🏠 Home",
+        "🔍 WAF Advisor", 
+        "🔒 Security",
+        "📊 Dashboard"
+    ]
+    
+    # Add EKS tab if module is available
+    if EKS_AVAILABLE:
+        tab_list.append("🚀 EKS Modernization")
+    
+    # Add EKS Sizing tab if available
+    if EKS_SIZING_AVAILABLE:
+        tab_list.append("📏 EKS Sizing")
+    
+    # Admin tab (if using Firebase)
+    if FIREBASE_AVAILABLE and has_permission('manage_settings'):
+        tab_list.append("⚙️ Admin")
+    
+    # Create tabs
+    tabs = st.tabs(tab_list)
+    
+    # ========================================================================
+    # TAB CONTENT - CUSTOMIZE EACH TAB
+    # ========================================================================
+    
+    current_tab = 0
+    
+    # Home Tab
+    with tabs[current_tab]:
+        st.header("🏠 Welcome")
+        st.markdown("""
+        ### Available Features:
+        - 🔍 **WAF Advisor**: Security analysis and recommendations
+        - 🔒 **Security**: Compliance and vulnerability scanning
+        - 📊 **Dashboard**: Metrics and monitoring
+        """)
+        
+        if EKS_AVAILABLE:
+            st.markdown("- 🚀 **EKS Modernization**: Complete EKS transformation toolkit")
+        
+        if EKS_SIZING_AVAILABLE:
+            st.markdown("- 📏 **EKS Sizing**: Capacity planning and component selection")
+        
+        # Show quick stats or overview
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Security Assessments", "12")
+        with col2:
+            st.metric("Active Clusters", "5" if EKS_AVAILABLE else "N/A")
+        with col3:
+            st.metric("Cost Savings", "$72K/year" if EKS_AVAILABLE else "N/A")
+    
+    current_tab += 1
+    
+    # WAF Advisor Tab
+    with tabs[current_tab]:
+        st.header("🔍 WAF Advisor")
+        # Your existing WAF advisor code here
+        st.info("WAF Advisor content goes here")
+    
+    current_tab += 1
+    
+    # Security Tab
+    with tabs[current_tab]:
+        st.header("🔒 Security Assessment")
+        # Your existing security code here
+        st.info("Security assessment content goes here")
+    
+    current_tab += 1
+    
+    # Dashboard Tab
+    with tabs[current_tab]:
+        st.header("📊 Dashboard")
+        # Your existing dashboard code here
+        st.info("Dashboard content goes here")
+    
+    current_tab += 1
+    
+    # ========================================================================
+    # EKS MODERNIZATION TAB - THE IMPORTANT PART!
+    # ========================================================================
+    
+    if EKS_AVAILABLE:
+        with tabs[current_tab]:
+            try:
+                render_eks_modernization_hub()
+            except Exception as e:
+                st.error("❌ Error loading EKS Modernization Hub")
+                st.exception(e)
+                st.info("""
+                **Troubleshooting:**
+                1. Check that all dependencies are installed
+                2. Verify AWS credentials are configured
+                3. Enable Demo Mode in the sidebar
+                4. Check the console for detailed errors
+                """)
+        current_tab += 1
+    
+    # EKS Sizing Tab (Optional)
+    if EKS_SIZING_AVAILABLE:
+        with tabs[current_tab]:
+            try:
+                sizing_tabs = st.tabs([
+                    "📊 Sizing Framework",
+                    "🔧 Component Selection", 
+                    "🗺️ Transformation Roadmap"
+                ])
+                
+                with sizing_tabs[0]:
+                    render_eks_sizing_framework()
+                
+                with sizing_tabs[1]:
+                    render_component_selection_guide()
+                
+                with sizing_tabs[2]:
+                    render_integrated_transformation_roadmap()
+            except Exception as e:
+                st.error("❌ Error loading EKS Sizing Module")
+                st.exception(e)
+        current_tab += 1
+    
+    # Admin Tab (if using Firebase)
+    if FIREBASE_AVAILABLE and has_permission('manage_settings'):
+        with tabs[current_tab]:
+            st.header("⚙️ Admin Panel")
+            try:
+                render_admin_user_management()
+            except Exception as e:
+                st.error("❌ Error loading Admin Panel")
+                st.exception(e)
+        current_tab += 1
+    
+    # User profile in sidebar
+    if FIREBASE_AVAILABLE:
+        render_user_profile_sidebar()
+
+
+# ============================================================================
+# SECTION 4: ERROR BOUNDARY WRAPPER (Optional but Recommended)
+# ============================================================================
+
+def safe_main():
+    """
+    Wrapper around main() with error handling
+    Use this instead of calling main() directly
+    """
+    try:
+        main()
+    except Exception as e:
+        st.error("🚨 Application Error")
+        st.exception(e)
+        
+        with st.expander("🔍 Debug Information"):
+            st.markdown("### Environment")
+            st.code(f"""
+Python Version: {sys.version}
+Streamlit Version: {st.__version__}
+Firebase Available: {FIREBASE_AVAILABLE}
+EKS Available: {EKS_AVAILABLE}
+EKS Sizing Available: {EKS_SIZING_AVAILABLE}
+            """)
+            
+            if not EKS_AVAILABLE and EKS_ERROR:
+                st.markdown("### EKS Module Error")
+                st.code(EKS_ERROR, language="text")
+        
+        if st.button("🔄 Reload App"):
+            st.rerun()
+
+
+# ============================================================================
+# SECTION 5: APP ENTRY POINT
+# ============================================================================
+
+if __name__ == "__main__":
+    # Use safe_main() for error handling, or main() for direct execution
+    safe_main()
+    # main()  # Alternative: direct execution
+
+
+# ============================================================================
+# INTEGRATION CHECKLIST
+# ============================================================================
+"""
+✅ Step 1: Copy this entire file content
+✅ Step 2: Paste into your streamlit_app.py (replacing or merging with existing code)
+✅ Step 3: Ensure these files are in your project directory:
+    - firebase_auth_module.py (use the FIXED version!)
+    - eks_modernization_module.py
+    - eks_sizing_and_components.py (optional)
+✅ Step 4: Update requirements.txt with:
+    streamlit>=1.28.0
+    boto3>=1.28.0
+    pandas>=2.0.0
+    plotly>=5.17.0
+    anthropic>=0.18.0
+    firebase-admin>=6.0.0
+    pyrebasex>=1.0.0
+✅ Step 5: Run: streamlit run streamlit_app.py
+✅ Step 6: Check sidebar for "Module Status" to verify all modules loaded
+
+EXPECTED RESULT:
+- Firebase auth works without TypeError
+- EKS Modernization tab appears
+- All features accessible
+"""
 # ============================================================================
 # RUN APPLICATION
 # ============================================================================
