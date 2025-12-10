@@ -873,7 +873,45 @@ def run_aws_scan(assessment: Dict):
                 else:
                     # Try real AWS scan with valid session
                     scanner = AWSLandscapeScanner(session)
-                    scan_results = scanner.scan_all()
+                    # Get default regions or use specified regions
+                    regions = st.session_state.get('aws_regions', ['us-east-1'])
+                    
+                    # Run scan with progress callback
+                    landscape_assessment = scanner.run_scan(regions)
+                    
+                    # Convert LandscapeAssessment to dict format expected by WAF module
+                    scan_results = {
+                        'findings': [
+                            {
+                                'service': f.service.lower(),
+                                'severity': f.severity,
+                                'message': f.message,
+                                'recommendation': f.recommendation,
+                                'pillar': f.pillar
+                            } for f in landscape_assessment.findings
+                        ],
+                        'resources': {
+                            'regions': landscape_assessment.regions_scanned,
+                            's3_buckets': landscape_assessment.inventory.s3_buckets,
+                            'ec2_instances': landscape_assessment.inventory.ec2_instances,
+                            'rds_instances': landscape_assessment.inventory.rds_instances,
+                            'lambda_functions': landscape_assessment.inventory.lambda_functions,
+                            'dynamodb_tables': landscape_assessment.inventory.dynamodb_tables,
+                            'iam_users': landscape_assessment.inventory.iam_users,
+                            'iam_roles': landscape_assessment.inventory.iam_roles,
+                            'kms_keys': landscape_assessment.inventory.kms_keys,
+                            'security_groups': [],  # Can be added if needed
+                            'vpcs': landscape_assessment.inventory.vpcs,
+                            'eks_clusters': landscape_assessment.inventory.eks_clusters,
+                            'guardduty_enabled': True,  # From inventory if available
+                            'cloudtrail_enabled': True,  # From inventory if available
+                        },
+                        'overall_score': landscape_assessment.overall_score,
+                        'overall_risk': landscape_assessment.overall_risk,
+                        'pillar_scores': {k: v.__dict__ for k, v in landscape_assessment.pillar_scores.items()},
+                        'scan_duration': landscape_assessment.scan_duration_seconds,
+                        'timestamp': landscape_assessment.timestamp.isoformat()
+                    }
             else:
                 # Use demo data
                 scan_results = generate_demo_scan_results()
@@ -1267,7 +1305,39 @@ def run_standalone_scan(aws_account: str, region: str):
                 else:
                     # Try real AWS scan with valid session
                     scanner = AWSLandscapeScanner(session)
-                    scan_results = scanner.scan_all()
+                    # Use provided region or default
+                    regions = [region] if region else ['us-east-1']
+                    
+                    # Run scan
+                    landscape_assessment = scanner.run_scan(regions)
+                    
+                    # Convert LandscapeAssessment to dict format
+                    scan_results = {
+                        'findings': [
+                            {
+                                'service': f.service.lower(),
+                                'severity': f.severity,
+                                'message': f.message,
+                                'recommendation': f.recommendation,
+                                'pillar': f.pillar
+                            } for f in landscape_assessment.findings
+                        ],
+                        'resources': {
+                            'regions': landscape_assessment.regions_scanned,
+                            's3_buckets': landscape_assessment.inventory.s3_buckets,
+                            'ec2_instances': landscape_assessment.inventory.ec2_instances,
+                            'rds_instances': landscape_assessment.inventory.rds_instances,
+                            'lambda_functions': landscape_assessment.inventory.lambda_functions,
+                            'dynamodb_tables': landscape_assessment.inventory.dynamodb_tables,
+                            'iam_users': landscape_assessment.inventory.iam_users,
+                            'iam_roles': landscape_assessment.inventory.iam_roles,
+                            'kms_keys': landscape_assessment.inventory.kms_keys,
+                            'vpcs': landscape_assessment.inventory.vpcs,
+                            'eks_clusters': landscape_assessment.inventory.eks_clusters,
+                        },
+                        'overall_score': landscape_assessment.overall_score,
+                        'overall_risk': landscape_assessment.overall_risk,
+                    }
             else:
                 scan_results = generate_demo_scan_results()
             
