@@ -2034,16 +2034,21 @@ def render_karpenter_toolkit():
         st.subheader("📋 7-Phase Migration Plan")
         plan = KarpenterToolkit.generate_migration_plan_from_ca()
         
-        for phase in plan:
-            with st.expander(f"Phase {phase['phase']}: {phase['name']} ({phase['duration']})", 
-                           expanded=phase['phase']==1):
+        for idx, phase in enumerate(plan, 1):
+            with st.expander(f"Phase {idx}: {phase['phase']} ({phase['duration']})", 
+                           expanded=idx==1):
                 st.markdown(f"**Duration:** {phase['duration']}")
-                st.markdown("**Tasks:**")
-                for task in phase['tasks'][:5]:  # Show first 5
-                    st.markdown(f"- {task}")
+                st.markdown("**Steps:**")
+                steps = phase.get('steps', phase.get('tasks', []))
+                for step in steps[:5]:  # Show first 5
+                    st.markdown(f"- {step}")
+                if len(steps) > 5:
+                    st.caption(f"... and {len(steps) - 5} more steps")
                 st.markdown("**Deliverables:**")
                 for d in phase['deliverables'][:3]:  # Show first 3
                     st.markdown(f"- {d}")
+                if len(phase['deliverables']) > 3:
+                    st.caption(f"... and {len(phase['deliverables']) - 3} more deliverables")
     
     # Patterns
     with karp_tabs[3]:
