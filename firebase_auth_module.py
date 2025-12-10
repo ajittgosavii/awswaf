@@ -786,9 +786,29 @@ def render_user_statistics():
     
     # Recent logins
     st.markdown("#### Recent Activity")
+    
+    # Function to safely get timestamp for sorting
+    def get_login_timestamp(user):
+        try:
+            last_login = user.get('last_login')
+            if last_login is None:
+                return 0  # Use timestamp 0 for missing dates
+            if isinstance(last_login, str):
+                try:
+                    dt = datetime.fromisoformat(last_login.replace('Z', '+00:00'))
+                    return dt.timestamp()
+                except:
+                    return 0
+            # Handle datetime objects (including Firebase DatetimeWithNanoseconds)
+            if hasattr(last_login, 'timestamp'):
+                return last_login.timestamp()
+            return 0
+        except:
+            return 0
+    
     recent_users = sorted(
         [u for u in users if u.get('last_login')],
-        key=lambda x: x.get('last_login') or '1970-01-01',
+        key=get_login_timestamp,
         reverse=True
     )[:5]
     
