@@ -688,6 +688,7 @@ def main():
         # Admin sees all tabs including User Management
         tabs = st.tabs([
             "📊 Dashboard",
+            "🔌 AWS Connector",
             "🏗️ WAF Assessment Hub",
             "📤 Architecture & Migration",
             "🏛️ Architecture Patterns",
@@ -698,7 +699,19 @@ def main():
         with tabs[0]:
             render_executive_dashboard()
         
-        with tabs[1]:  # WAF Assessment Hub
+        with tabs[1]:  # AWS Connector - NEW!
+            if MODULE_STATUS.get('AWS Connector'):
+                render_aws_connector_tab()
+            else:
+                st.error("❌ AWS Connector Module Not Loaded")
+                st.info("""
+                💡 To enable AWS Connector:
+                
+                1. Ensure aws_connector.py is in your project directory
+                2. Install required dependencies: `pip install boto3 pyyaml`
+                3. Restart the app
+                """)
+        with tabs[2]:  # WAF Assessment Hub
             if MODULE_STATUS.get('WAF Review'):
                 if has_permission("run_aws_scans") if FIREBASE_AVAILABLE and not auth_disabled else True:
                     render_waf_review_tab()
@@ -717,10 +730,10 @@ def main():
                 with st.expander("🔍 Error Details"):
                     st.code(MODULE_ERRORS.get('waf_review_module', 'Module not found'))
         
-        with tabs[2]:  # Architecture & Migration
+        with tabs[3]:  # Architecture & Migration
             render_architecture_migration_tab()
         
-        with tabs[3]:  # Architecture Patterns
+        with tabs[4]:  # Architecture Patterns
             if MODULE_STATUS.get('Architecture Patterns'):
                 render_architecture_patterns_tab()
             else:
@@ -736,7 +749,7 @@ def main():
                 with st.expander("🔍 Error Details"):
                     st.code(MODULE_ERRORS.get('architecture_patterns', 'Module not found'))
         
-        with tabs[4]:  # EKS & Modernization
+        with tabs[5]:  # EKS & Modernization
             if MODULE_STATUS.get('EKS & Modernization'):
                 if has_permission("run_aws_scans") if FIREBASE_AVAILABLE and not auth_disabled else True:
                     render_eks_modernization_hub()
@@ -755,7 +768,7 @@ def main():
                 with st.expander("🔍 Error Details"):
                     st.code(MODULE_ERRORS.get('eks_modernization', 'Module not found'))
         
-        with tabs[5]:  # User Management (Admin Only)
+        with tabs[6]:  # User Management (Admin Only)
             if FIREBASE_AVAILABLE and not auth_disabled:
                 render_admin_user_management()
             else:
@@ -775,6 +788,7 @@ def main():
         # Regular users see standard tabs (no User Management)
         tabs = st.tabs([
             "📊 Dashboard",
+            "🔌 AWS Connector",
             "🏗️ WAF Assessment Hub",
             "📤 Architecture & Migration",
             "🏛️ Architecture Patterns",
@@ -784,7 +798,20 @@ def main():
         with tabs[0]:
             render_executive_dashboard()
         
-        with tabs[1]:
+        with tabs[1]:  # AWS Connector - NEW!
+            if MODULE_STATUS.get('AWS Connector'):
+                render_aws_connector_tab()
+            else:
+                st.error("❌ AWS Connector Module Not Loaded")
+                st.info("""
+                💡 To enable AWS Connector:
+                
+                1. Ensure aws_connector.py is in your project directory
+                2. Install required dependencies: `pip install boto3 pyyaml`
+                3. Restart the app
+                """)
+                with st.expander("🔍 Error Details"):
+        with tabs[2]:
             if MODULE_STATUS.get('WAF Review'):
                 if has_permission("run_aws_scans") if FIREBASE_AVAILABLE else True:
                     render_waf_review_tab()
@@ -795,16 +822,16 @@ def main():
                 with st.expander("🔍 Error Details"):
                     st.code(MODULE_ERRORS.get('waf_review_module', 'Module not found'))
         
-        with tabs[2]:
+        with tabs[3]:
             render_architecture_migration_tab()
         
-        with tabs[3]:
+        with tabs[4]:
             if MODULE_STATUS.get('Architecture Patterns'):
                 render_architecture_patterns_tab()
             else:
                 st.error("❌ Architecture Patterns Module Not Loaded")
         
-        with tabs[4]:
+        with tabs[5]:
             if MODULE_STATUS.get('EKS & Modernization'):
                 render_eks_modernization_hub()
             else:
@@ -814,6 +841,7 @@ def main():
         # Viewers see limited tabs
         tabs = st.tabs([
             "📊 Dashboard",
+            "🔌 AWS Connector",
             "🏛️ Architecture Patterns"
         ])
         
@@ -822,7 +850,14 @@ def main():
             if not auth_disabled:
                 st.info("👁️ You have viewer access. Contact your administrator for additional permissions.")
         
-        with tabs[1]:
+        with tabs[1]:  # AWS Connector - NEW!
+            if MODULE_STATUS.get('AWS Connector'):
+                render_aws_connector_tab()
+            else:
+                st.error("❌ AWS Connector Module Not Loaded")
+                st.info("Contact your administrator to enable AWS Connector.")
+        
+        with tabs[2]:
             if MODULE_STATUS.get('Architecture Patterns'):
                 render_architecture_patterns_tab()
             else:
