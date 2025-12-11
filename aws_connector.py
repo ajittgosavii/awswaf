@@ -1,12 +1,25 @@
 """
-AWS Connector Module
-Handles AWS authentication, session management, and connection testing
+AWS Connector Module - Enhanced with Multi-Account Support
+Handles AWS authentication, session management, and multi-account orchestration
+Version: 3.0.0
 """
 
 import streamlit as st
 from typing import Optional, Tuple, Dict, List
 from dataclasses import dataclass
 import os
+import logging
+
+# Multi-account support (optional - graceful degradation if not available)
+try:
+    from multi_account_manager import MultiAccountManager, discover_all_regions
+    from config_loader import load_accounts_from_streamlit_secrets
+    MULTI_ACCOUNT_AVAILABLE = True
+except ImportError:
+    MULTI_ACCOUNT_AVAILABLE = False
+    logging.warning("Multi-account support not available - install dependencies")
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # DATA CLASSES
@@ -124,8 +137,115 @@ def test_aws_connection(session) -> Tuple[bool, str, Dict]:
 # RENDER FUNCTION
 # ============================================================================
 
+# ============================================================================
+# MULTI-ACCOUNT SUPPORT FUNCTIONS
+# ============================================================================
+
+def render_multi_account_section():
+    """Render multi-account scanning section"""
+    if not MULTI_ACCOUNT_AVAILABLE:
+        st.error("❌ Multi-account support requires additional dependencies")
+        st.code("pip install pyyaml", language="bash")
+        return
+    
+    # Check if hub account is connected
+    if not st.session_state.get('aws_connected'):
+        st.warning("⚠️ Please connect to your Hub Account first using Single Account mode")
+        return
+    
+    st.markdown("### 🌐 Multi-Account Scanning")
+    
+    # Load configured accounts
+    accounts = load_accounts_from_streamlit_secrets()
+    
+    if not accounts:
+        st.info("📝 No additional accounts configured in Streamlit secrets")
+        st.markdown("**To add accounts:**")
+        st.markdown("1. Go to Streamlit Cloud → Settings → Secrets")
+        st.markdown("2. Add account configuration (see `.streamlit/secrets.toml.template`)")
+        st.markdown("3. Save and app will restart")
+        
+        with st.expander("📖 Example Configuration"):
+            st.code("""
+[accounts]
+[[accounts.list]]
+account_id = "123456789012"
+account_name = "Production"
+environment = "production"
+role_arn = "arn:aws:iam::123456789012:role/WAFAdvisorCrossAccountRole"
+external_id = "your-secure-external-id"
+regions = ["us-east-1", "us-west-2"]
+priority = "high"
+""", language="toml")
+        return
+    
+    # Display account summary
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Configured Accounts", len(accounts))
+    with col2:
+        enabled = len([a for a in accounts if a.enabled])
+        st.metric("Enabled", enabled)
+    with col3:
+        total_regions = sum(len(a.regions) for a in accounts)
+        st.metric("Total Regions", total_regions)
+    
+    st.markdown("---")
+    
+    # Account selection
+    st.markdown("**Select Accounts to Scan:**")
+    selected_accounts = []
+    
+    for acc in accounts:
+        if acc.enabled:
+            col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+            with col1:
+                selected = st.checkbox(
+                    f"{acc.account_name}",
+                    key=f"select_{acc.account_id}",
+                    value=True
+                )
+            with col2:
+                st.write(f"*{acc.environment}*")
+            with col3:
+                st.write(f"{len(acc.regions)} region(s)")
+            with col4:
+                priority_icons = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
+                st.write(priority_icons.get(acc.priority, "⚪"))
+            
+            if selected:
+                selected_accounts.append(acc)
+    
+    if not selected_accounts:
+        st.warning("⚠️ No accounts selected")
+        return
+    
+    st.markdown("---")
+    
+    # Scan button
+    if st.button("🚀 Scan Selected Accounts", type="primary", use_container_width=True):
+        st.session_state.multi_account_scan_requested = True
+        st.session_state.selected_accounts_for_scan = selected_accounts
+
+def initialize_multi_account_manager():
+    """Initialize multi-account manager with hub session"""
+    if 'multi_account_manager' not in st.session_state:
+        if st.session_state.get('aws_session'):
+            try:
+                manager = MultiAccountManager(st.session_state.aws_session)
+                st.session_state.multi_account_manager = manager
+                return manager
+            except Exception as e:
+                st.error(f"Failed to initialize multi-account manager: {e}")
+                return None
+    return st.session_state.get('multi_account_manager')
+
+# ============================================================================
+# MAIN RENDER FUNCTION (UPDATED)
+# ============================================================================
+
 def render_aws_connector_tab():
-    """Render AWS Connector configuration tab"""
+    """Render AWS Connector configuration tab - Enhanced with multi-account support"""
     
     st.markdown("""
     <div style="background: linear-gradient(135deg, #232F3E 0%, #37475A 100%); padding: 2rem; border-radius: 12px; margin-bottom: 1.5rem;">
@@ -142,6 +262,42 @@ def render_aws_connector_tab():
         BOTO3_AVAILABLE = False
         st.error("❌ boto3 not installed. Add `boto3` to requirements.txt")
         return
+    
+    # Mode selection (Single Account vs Multi-Account)
+    if MULTI_ACCOUNT_AVAILABLE:
+        mode_col1, mode_col2 = st.columns(2)
+        with mode_col1:
+            scan_mode = st.radio(
+                "Scanning Mode",
+                ["🔵 Single Account", "🌐 Multi-Account"],
+                horizontal=True,
+                help="Single: Scan one account | Multi: Scan multiple accounts in parallel"
+            )
+        st.markdown("---")
+    else:
+        scan_mode = "🔵 Single Account"
+    
+    # Route to appropriate rendering
+    if "Multi-Account" in scan_mode:
+        # First ensure single account connection for hub
+        if not st.session_state.get('aws_connected'):
+            st.info("👆 First, connect to your Hub Account below")
+        
+        # Render single account connection section (collapsed)
+        with st.expander("🔐 Hub Account Connection", expanded=not st.session_state.get('aws_connected')):
+            render_single_account_section()
+        
+        st.markdown("---")
+        
+        # Render multi-account section
+        render_multi_account_section()
+        return
+    
+    # Single account mode (original functionality)
+    render_single_account_section()
+
+def render_single_account_section():
+    """Render single account connection section (original functionality)"""
     
     # Connection status
     col1, col2 = st.columns([2, 1])
