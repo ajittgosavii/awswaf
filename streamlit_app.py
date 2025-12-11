@@ -811,6 +811,8 @@ def main():
                 3. Restart the app
                 """)
                 with st.expander("🔍 Error Details"):
+                    st.code(MODULE_ERRORS.get('aws_connector', 'Module not found'))
+        
         with tabs[2]:
             if MODULE_STATUS.get('WAF Review'):
                 if has_permission("run_aws_scans") if FIREBASE_AVAILABLE else True:
