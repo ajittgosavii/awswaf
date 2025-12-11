@@ -182,12 +182,21 @@ except Exception as e:
     MODULE_STATUS['Migration & DR'] = False
     MODULE_ERRORS['migration_dr_module'] = str(e)
 
+# PDF Report Generator - Multi-Account Support
 try:
-    from pdf_report_generator import generate_comprehensive_waf_report
+    from pdf_report_generator_multiaccount import (
+        generate_multiaccount_waf_report,
+        generate_waf_report  # Backward compatible
+    )
     MODULE_STATUS['PDF Reports'] = True
 except Exception as e:
-    MODULE_STATUS['PDF Reports'] = False
-    MODULE_ERRORS['pdf_report_generator'] = str(e)
+    # Fallback to original if multi-account version not available
+    try:
+        from pdf_report_generator import generate_comprehensive_waf_report
+        MODULE_STATUS['PDF Reports'] = True
+    except:
+        MODULE_STATUS['PDF Reports'] = False
+        MODULE_ERRORS['pdf_report_generator'] = str(e)
 
 try:
     from architecture_patterns import render_architecture_patterns_tab
@@ -443,6 +452,170 @@ def get_anthropic_client():
         return anthropic.Anthropic(api_key=api_key)
     except:
         return None
+
+# ============================================================================
+# PDF REPORT GENERATION - MULTI-ACCOUNT SUPPORT
+# ============================================================================
+
+def render_pdf_report_buttons(assessments=None, accounts_config=None, scan_type="single"):
+    """
+    Render PDF report generation buttons
+    
+    Args:
+        assessments: Single assessment dict or list of assessment dicts
+        accounts_config: Single account config or list of account configs
+        scan_type: 'single' or 'multi' - determines which generator to use
+    """
+    
+    if not MODULE_STATUS.get('PDF Reports'):
+        st.warning("⚠️ PDF report generation not available. Install: `pip install reportlab Pillow`")
+        return
+    
+    if assessments is None:
+        st.info("💡 Run an assessment first to generate reports")
+        return
+    
+    st.markdown("---")
+    st.markdown("### 📄 Generate PDF Reports")
+    st.markdown("Create professional reports to share with stakeholders")
+    
+    # Convert single assessment to list format for consistency
+    if isinstance(assessments, dict):
+        assessments = [assessments]
+        if accounts_config and isinstance(accounts_config, dict):
+            accounts_config = [accounts_config]
+        elif not accounts_config:
+            # Create default config for single account
+            accounts_config = [{
+                'account_name': assessments[0].get('account_name', 'AWS Account'),
+                'account_id': assessments[0].get('account_id', 'unknown'),
+                'environment': 'production',
+                'regions': assessments[0].get('regions_scanned', []),
+                'priority': 'high'
+            }]
+    
+    # Show metrics preview
+    col1, col2, col3, col4 = st.columns(4)
+    
+    total_accounts = len(assessments)
+    total_findings = sum(len(a.get('findings', [])) for a in assessments)
+    critical_findings = sum(
+        sum(1 for f in a.get('findings', []) if f.get('severity', '').lower() == 'critical')
+        for a in assessments
+    )
+    total_resources = sum(
+        sum(len(v) if isinstance(v, list) else 0 for v in a.get('resources', {}).values())
+        for a in assessments
+    )
+    
+    with col1:
+        st.metric("Accounts", total_accounts)
+    with col2:
+        st.metric("Findings", total_findings)
+    with col3:
+        st.metric("Critical", critical_findings, delta="⚠️" if critical_findings > 0 else None)
+    with col4:
+        st.metric("Resources", f"{total_resources:,}")
+    
+    st.markdown("")
+    
+    # Report type buttons
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("📊 Executive Report", use_container_width=True, help="High-level summary (5-10 pages)"):
+            with st.spinner('Generating executive report...'):
+                try:
+                    pdf_bytes = generate_multiaccount_waf_report(
+                        assessments=assessments,
+                        accounts_config=accounts_config,
+                        report_type='executive'
+                    )
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    filename = f"waf_executive_{timestamp}.pdf"
+                    
+                    st.success("✅ Executive report generated!")
+                    st.download_button(
+                        label="📥 Download Executive PDF",
+                        data=pdf_bytes,
+                        file_name=filename,
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Failed to generate report: {str(e)}")
+    
+    with col2:
+        if st.button("📋 Comprehensive Report", use_container_width=True, help="Complete analysis (20-50 pages)"):
+            with st.spinner('Generating comprehensive report... This may take up to 60 seconds.'):
+                try:
+                    pdf_bytes = generate_multiaccount_waf_report(
+                        assessments=assessments,
+                        accounts_config=accounts_config,
+                        report_type='comprehensive'
+                    )
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    filename = f"waf_comprehensive_{timestamp}.pdf"
+                    
+                    st.success("✅ Comprehensive report generated!")
+                    st.download_button(
+                        label="📥 Download Comprehensive PDF",
+                        data=pdf_bytes,
+                        file_name=filename,
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Failed to generate report: {str(e)}")
+    
+    with col3:
+        if st.button("🔧 Technical Report", use_container_width=True, help="Detailed technical findings (15-30 pages)"):
+            with st.spinner('Generating technical report...'):
+                try:
+                    pdf_bytes = generate_multiaccount_waf_report(
+                        assessments=assessments,
+                        accounts_config=accounts_config,
+                        report_type='technical'
+                    )
+                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                    filename = f"waf_technical_{timestamp}.pdf"
+                    
+                    st.success("✅ Technical report generated!")
+                    st.download_button(
+                        label="📥 Download Technical PDF",
+                        data=pdf_bytes,
+                        file_name=filename,
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error(f"Failed to generate report: {str(e)}")
+    
+    # Report descriptions
+    with st.expander("ℹ️ Report Type Descriptions"):
+        st.markdown("""
+        **📊 Executive Report** (5-10 pages, ~10 seconds)
+        - High-level summary for leadership
+        - Key metrics dashboard
+        - Top 5 security risks
+        - Strategic recommendations
+        
+        **📋 Comprehensive Report** (20-50 pages, ~30-60 seconds)
+        - Complete detailed analysis
+        - Executive summary
+        - Multi-account overview
+        - Per-account sections
+        - Security posture analysis
+        - Compliance assessment
+        - Remediation roadmap
+        
+        **🔧 Technical Report** (15-30 pages, ~20-40 seconds)
+        - Deep technical details
+        - All findings with remediation steps
+        - Resource inventory
+        - Configuration details
+        - For engineering teams
+        """)
 
 # ============================================================================
 # SIDEBAR - ENHANCED WITH USER PROFILE
@@ -715,6 +888,23 @@ def main():
             if MODULE_STATUS.get('WAF Review'):
                 if has_permission("run_aws_scans") if FIREBASE_AVAILABLE and not auth_disabled else True:
                     render_waf_review_tab()
+                    
+                    # PDF Report Generation - Add after scan completes
+                    if st.session_state.get('assessment_completed') or st.session_state.get('multi_account_scan_completed'):
+                        # Check for multi-account results first
+                        if st.session_state.get('multi_account_scan_results'):
+                            render_pdf_report_buttons(
+                                assessments=st.session_state.multi_account_scan_results,
+                                accounts_config=st.session_state.get('selected_accounts_for_scan', []),
+                                scan_type="multi"
+                            )
+                        # Fall back to single account results
+                        elif st.session_state.get('assessment_results'):
+                            render_pdf_report_buttons(
+                                assessments=st.session_state.assessment_results,
+                                accounts_config=None,
+                                scan_type="single"
+                            )
                 else:
                     st.warning("⚠️ You don't have permission to run AWS scans")
             else:
@@ -817,6 +1007,23 @@ def main():
             if MODULE_STATUS.get('WAF Review'):
                 if has_permission("run_aws_scans") if FIREBASE_AVAILABLE else True:
                     render_waf_review_tab()
+                    
+                    # PDF Report Generation - Add after scan completes
+                    if st.session_state.get('assessment_completed') or st.session_state.get('multi_account_scan_completed'):
+                        # Check for multi-account results first
+                        if st.session_state.get('multi_account_scan_results'):
+                            render_pdf_report_buttons(
+                                assessments=st.session_state.multi_account_scan_results,
+                                accounts_config=st.session_state.get('selected_accounts_for_scan', []),
+                                scan_type="multi"
+                            )
+                        # Fall back to single account results
+                        elif st.session_state.get('assessment_results'):
+                            render_pdf_report_buttons(
+                                assessments=st.session_state.assessment_results,
+                                accounts_config=None,
+                                scan_type="single"
+                            )
                 else:
                     st.warning("⚠️ You don't have permission to run AWS scans")
             else:
