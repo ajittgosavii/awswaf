@@ -17,7 +17,7 @@ def calculate_assessment_scores(assessment: Dict, questions: List) -> None:
     1. Calculates overall score based on responses
     2. Calculates pillar scores
     3. Updates progress percentage (correctly!)
-    4. Generates action items if needed
+    4. Generates action items based on risk levels
     
     Args:
         assessment: The assessment dictionary
@@ -29,6 +29,7 @@ def calculate_assessment_scores(assessment: Dict, questions: List) -> None:
         assessment['overall_score'] = 0
         assessment['progress'] = 0
         assessment['scores'] = {}
+        assessment['action_items'] = []
         return
     
     # ============================================================================
@@ -48,7 +49,7 @@ def calculate_assessment_scores(assessment: Dict, questions: List) -> None:
     assessment['overall_score'] = round(overall_score, 1)
     
     # ============================================================================
-    # 2. CALCULATE PILLAR SCORES
+    # 2. CALCULATE PILLAR SCORES - FIXED!
     # ============================================================================
     # Import Pillar enum
     try:
@@ -67,8 +68,10 @@ def calculate_assessment_scores(assessment: Dict, questions: List) -> None:
     
     pillar_scores = {}
     
+    # FIX: Iterate through Pillar enum properly
     for pillar in Pillar:
-        pillar_questions = [q for q in questions if q.pillar == pillar]
+        # Get questions for this pillar - compare by value, not object
+        pillar_questions = [q for q in questions if q.pillar.value == pillar.value]
         
         if not pillar_questions:
             pillar_scores[pillar.value] = 0
@@ -105,17 +108,22 @@ def calculate_assessment_scores(assessment: Dict, questions: List) -> None:
     assessment['updated_at'] = datetime.now().isoformat()
     
     # ============================================================================
-    # 5. GENERATE ACTION ITEMS (if needed)
+    # 5. GENERATE ACTION ITEMS - FIXED LOGIC!
     # ============================================================================
-    # Check if we need to generate action items
-    # Only generate if assessment is substantially complete and has risks
-    if progress > 50 and overall_score < 80:  # If >50% done and score <80
+    # ALWAYS generate action items if assessment is complete or near-complete
+    # Don't restrict based on overall score - risk items exist regardless of score
+    if progress > 80:  # If >80% done, generate action items
         generate_action_items(assessment, questions)
 
 
 def generate_action_items(assessment: Dict, questions: List) -> None:
     """
     Generate action items based on responses
+    
+    Generates action items for:
+    - CRITICAL risks (priority 1)
+    - HIGH risks (priority 2)  
+    - MEDIUM risks (priority 3)
     
     Args:
         assessment: The assessment dictionary
@@ -129,26 +137,57 @@ def generate_action_items(assessment: Dict, questions: List) -> None:
             response = responses[question.id]
             risk_level = response.get('risk_level', 'NONE')
             
-            # Generate action item for HIGH and CRITICAL risks
-            if risk_level in ['HIGH', 'CRITICAL']:
+            # Generate action items for CRITICAL, HIGH, and MEDIUM risks
+            if risk_level in ['CRITICAL', 'HIGH', 'MEDIUM']:
+                # Get question details
+                question_text = question.text if hasattr(question, 'text') else 'Unknown Question'
+                question_desc = question.description if hasattr(question, 'description') else ''
+                question_pillar = question.pillar.value if hasattr(question, 'pillar') else 'Unknown'
+                
+                # Determine priority
+                if risk_level == 'CRITICAL':
+                    priority = 1
+                    effort = '1-2 weeks'
+                    cost = '$$$$'
+                elif risk_level == 'HIGH':
+                    priority = 2
+                    effort = '1 week'
+                    cost = '$$$'
+                else:  # MEDIUM
+                    priority = 3
+                    effort = '2-3 days'
+                    cost = '$$'
+                
                 action_item = {
                     'id': f"action_{question.id}",
                     'question_id': question.id,
-                    'title': f"Address {question.text[:50]}...",
-                    'description': question.description,
+                    'title': f"Improve: {question_text[:60]}..." if len(question_text) > 60 else f"Improve: {question_text}",
+                    'description': question_desc,
                     'risk_level': risk_level,
-                    'pillar': question.pillar.value,
+                    'pillar': question_pillar,
                     'status': 'Open',
-                    'priority': 1 if risk_level == 'CRITICAL' else 2,
-                    'estimated_effort': 'TBD',
-                    'estimated_cost': 'TBD',
+                    'priority': priority,
+                    'estimated_effort': effort,
+                    'estimated_cost': cost,
+                    'choice_selected': response.get('choice_text', ''),
+                    'notes': response.get('notes', ''),
                     'created_at': datetime.now().isoformat()
                 }
                 action_items.append(action_item)
     
-    # Only update if we have new action items
-    if action_items:
-        assessment['action_items'] = action_items
+    # Sort by priority (CRITICAL first)
+    action_items.sort(key=lambda x: x['priority'])
+    
+    # Update assessment
+    assessment['action_items'] = action_items
+    
+    # Add summary statistics
+    assessment['action_items_summary'] = {
+        'total': len(action_items),
+        'critical': sum(1 for item in action_items if item['risk_level'] == 'CRITICAL'),
+        'high': sum(1 for item in action_items if item['risk_level'] == 'HIGH'),
+        'medium': sum(1 for item in action_items if item['risk_level'] == 'MEDIUM')
+    }
 
 
 def get_score_color(score: float) -> str:
