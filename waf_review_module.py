@@ -15,6 +15,8 @@ Features:
 - Industry benchmarking
 - Evidence collection and management
 """
+
+from __future__ import annotations
 # ============= TEMPORARY DIAGNOSTIC CODE =============
 import streamlit as st
 
@@ -64,7 +66,16 @@ def show_secrets_diagnostic():
 # Run diagnostic automatically
 show_secrets_diagnostic()
 # ============= END DIAGNOSTIC CODE =============
-from __future__ import annotations
+
+# Now continue with regular imports
+import streamlit as st
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple, Any
+from dataclasses import dataclass, field
+from enum import Enum
+import json
+import uuid
+import hashlib
 
 import streamlit as st
 from datetime import datetime, timedelta
