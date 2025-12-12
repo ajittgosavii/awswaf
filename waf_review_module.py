@@ -1127,7 +1127,7 @@ def render_assessments_list():
     with col2:
         st.markdown("### ➕ Create New Assessment")
         
-        with st.form("new_assessment_form"):
+        with st.form("main_new_assessment_form"):
             st.caption("Create a comprehensive WAF assessment with AI assistance and automated scanning")
             
             assessment_name = st.text_input(
@@ -1737,7 +1737,7 @@ def render_compliance_view():
     with col2:
         st.markdown("### ➕ New Assessment")
         
-        with st.form("new_assessment_form"):
+        with st.form("compliance_new_assessment_form"):
             assessment_name = st.text_input(
                 "Assessment Name",
                 placeholder="e.g., Production Workload Q4 2024"
