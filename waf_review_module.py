@@ -17,65 +17,7 @@ Features:
 """
 
 from __future__ import annotations
-# ============= TEMPORARY DIAGNOSTIC CODE =============
-import streamlit as st
 
-def show_secrets_diagnostic():
-    """Diagnostic to debug API key issue"""
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🔍 Secrets Debug")
-    
-    try:
-        # Check if secrets exist at all
-        if not hasattr(st, 'secrets'):
-            st.sidebar.error("❌ st.secrets not available!")
-            return
-        
-        # Check root level
-        if "ANTHROPIC_API_KEY" in st.secrets:
-            key = st.secrets["ANTHROPIC_API_KEY"]
-            st.sidebar.success(f"✅ Root level: Found ({len(key)} chars)")
-            st.sidebar.code(f"{key[:15]}...")
-        else:
-            st.sidebar.warning("❌ Not at root level")
-        
-        # Check [anthropic] section
-        if "anthropic" in st.secrets:
-            st.sidebar.info("ℹ️ Found [anthropic] section")
-            if "ANTHROPIC_API_KEY" in st.secrets["anthropic"]:
-                key = st.secrets["anthropic"]["ANTHROPIC_API_KEY"]
-                st.sidebar.success(f"✅ In [anthropic]: Found ({len(key)} chars)")
-                st.sidebar.code(f"{key[:15]}...")
-            else:
-                st.sidebar.warning("❌ Not in [anthropic] section")
-        else:
-            st.sidebar.info("ℹ️ No [anthropic] section")
-        
-        # Show all top-level keys
-        st.sidebar.markdown("**All keys:**")
-        try:
-            all_keys = list(st.secrets.keys())
-            for key in all_keys:
-                st.sidebar.text(f"  - {key}")
-        except:
-            st.sidebar.error("Can't list keys")
-            
-    except Exception as e:
-        st.sidebar.error(f"Error: {str(e)}")
-
-# Run diagnostic automatically
-show_secrets_diagnostic()
-# ============= END DIAGNOSTIC CODE =============
-
-# Now continue with regular imports
-import streamlit as st
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass, field
-from enum import Enum
-import json
-import uuid
-import hashlib
 
 import streamlit as st
 from datetime import datetime, timedelta
