@@ -2062,6 +2062,42 @@ def render_dashboard_tab(assessment: Dict):
     with col4:
         st.metric("Action Items", len(assessment.get('action_items', [])))
     
+    # ADD RECALCULATE BUTTON - CRITICAL FIX FOR EXISTING ASSESSMENTS
+    if len(assessment.get('responses', {})) > 0:
+        if assessment.get('overall_score', 0) == 0 or assessment.get('progress', 0) != 100:
+            st.warning("⚠️ Scores need recalculation. Click the button below to fix.")
+        
+        if st.button("🔄 Recalculate All Scores Now", use_container_width=True, type="primary"):
+            with st.spinner("Recalculating all scores..."):
+                try:
+                    # Get ALL questions
+                    questions = get_complete_waf_questions()
+                    
+                    # Import and run scoring
+                    from assessment_scoring_helper import calculate_assessment_scores
+                    calculate_assessment_scores(assessment, questions)
+                    
+                    # Save to Firebase if available
+                    try:
+                        from firebase_database_helper import save_assessment_to_firebase
+                        if st.session_state.get('firebase_initialized', False):
+                            assessment_id = assessment.get('assessment_id') or assessment.get('id')
+                            save_assessment_to_firebase(assessment_id, assessment)
+                    except:
+                        pass
+                    
+                    st.success(f"""
+                    ✅ **Recalculation Complete!**
+                    - Overall Score: {assessment.get('overall_score', 0)}/100
+                    - Progress: {assessment.get('progress', 0)}%
+                    - Pillar Scores: {len(assessment.get('scores', {}))} calculated
+                    - Action Items: {len(assessment.get('action_items', []))} generated
+                    """)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error recalculating: {str(e)}")
+                    st.exception(e)
+    
     st.divider()
     
     # Pillar scores
@@ -2144,8 +2180,9 @@ def render_assessment_tab(assessment: Dict):
     # USE PAGINATION MODULE (if available) - NEW!
     # ============================================================================
     if PAGINATION_AVAILABLE:
-        # Use the enhanced pagination module
-        render_questions_with_pagination(assessment, filtered_questions, pillar_filter)
+        # CRITICAL FIX: Pass ALL questions (not filtered_questions) for accurate scoring
+        # The pagination module will handle pillar filtering for display
+        render_questions_with_pagination(assessment, questions, pillar_filter)
     else:
         # Fallback to original loop-based rendering (show limited questions)
         st.warning("Using legacy view. Install pagination module for better experience.")
