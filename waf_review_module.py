@@ -1873,7 +1873,8 @@ def render_assessment_workspace():
     col1, col2, col3 = st.columns([3, 1, 1])
     with col1:
         status_emoji = "✅" if assessment.get('status') == 'completed' else "🔄"
-        st.markdown(f"### {status_emoji} {assessment['name']}")
+        assessment_name = assessment.get('name') or assessment.get('workload_name', 'Unnamed Assessment')
+        st.markdown(f"### {status_emoji} {assessment_name}")
         st.caption(f"Workload: {assessment.get('workload_name', 'N/A')} | "
                   f"Environment: {assessment.get('environment', 'N/A')} | "
                   f"Progress: {assessment.get('progress', 0)}%")
@@ -1924,7 +1925,8 @@ def render_full_report(assessment: Dict):
     # Header actions
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        st.markdown(f"**{assessment['name']}**")
+        assessment_name = assessment.get('name') or assessment.get('workload_name', 'Unnamed Assessment')
+        st.markdown(f"**{assessment_name}**")
         st.caption(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
     
     with col2:
@@ -2518,10 +2520,11 @@ def render_reports_tab(assessment: Dict):
     with col2:
         if st.button("📥 Export Data (JSON)", use_container_width=True):
             export_data = json.dumps(assessment, indent=2, default=str)
+            assessment_id = assessment.get('assessment_id') or assessment.get('id', 'unknown')
             st.download_button(
                 "⬇️ Download JSON",
                 export_data,
-                file_name=f"waf_assessment_{assessment['id'][:8]}.json",
+                file_name=f"waf_assessment_{assessment_id[:8]}.json",
                 mime="application/json"
             )
 
