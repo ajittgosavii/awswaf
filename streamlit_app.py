@@ -218,14 +218,6 @@ except Exception as e:
     MODULE_STATUS['Architecture Patterns'] = False
     MODULE_ERRORS['architecture_patterns'] = str(e)
 
-# Integrated Design & WAF Hub Module
-try:
-    from modules_design_waf_integrated import IntegratedDesignWAFHub
-    MODULE_STATUS['Design & WAF Hub'] = True
-except Exception as e:
-    MODULE_STATUS['Design & WAF Hub'] = False
-    MODULE_ERRORS['modules_design_waf_integrated'] = str(e)
-
 # WAF Review Module
 try:
     from waf_review_module import render_waf_review_tab
@@ -955,7 +947,9 @@ def main():
         tabs = st.tabs([
             "📊 Dashboard",
             "🔌 AWS Connector",
-            "📐 Design & Well-Architected Hub",
+            "🏗️ WAF Assessment Hub",
+            "📤 Architecture & Migration",
+            "🏛️ Architecture Patterns",
             "🚀 EKS & Modernization",
             "👥 User Management"
         ])
@@ -975,33 +969,62 @@ def main():
                 2. Install required dependencies: `pip install boto3 pyyaml`
                 3. Restart the app
                 """)
-        
-        with tabs[2]:  # Design & Well-Architected Hub (INTEGRATED!)
-            if MODULE_STATUS.get('Design & WAF Hub'):
-                try:
-                    IntegratedDesignWAFHub.render()
-                except Exception as e:
-                    st.error(f"❌ Error loading Design & WAF Hub: {str(e)}")
-                    st.info("""
-                    💡 To enable Design & WAF Hub:
+        with tabs[2]:  # WAF Assessment Hub
+            if MODULE_STATUS.get('WAF Review'):
+                if has_permission("run_aws_scans") if FIREBASE_AVAILABLE and not auth_disabled else True:
+                    render_waf_review_tab()
                     
-                    1. Ensure modules_design_waf_integrated.py is in your project directory
-                    2. Restart the app
-                    """)
+                    # PDF Report Generation - Add after scan completes
+                    if st.session_state.get('assessment_completed') or st.session_state.get('multi_account_scan_completed'):
+                        # Check for multi-account results first
+                        if st.session_state.get('multi_account_scan_results'):
+                            render_pdf_report_buttons(
+                                assessments=st.session_state.multi_account_scan_results,
+                                accounts_config=st.session_state.get('selected_accounts_for_scan', []),
+                                scan_type="multi"
+                            )
+                        # Fall back to single account results
+                        elif st.session_state.get('assessment_results'):
+                            render_pdf_report_buttons(
+                                assessments=st.session_state.assessment_results,
+                                accounts_config=None,
+                                scan_type="single"
+                            )
+                else:
+                    st.warning("⚠️ You don't have permission to run AWS scans")
             else:
-                st.error("❌ Design & WAF Hub Not Loaded")
+                st.error("❌ WAF Assessment Hub Not Loaded")
                 st.info("""
-                💡 To enable Design & WAF Hub:
+                💡 To enable WAF Assessment Hub:
                 
                 ```
-                # 1. Ensure modules_design_waf_integrated.py is in your project directory
+                # 1. Ensure waf_review_module.py is in your project directory
                 # 2. Check the error below for details
                 ```
                 """)
                 with st.expander("🔍 Error Details"):
-                    st.code(MODULE_ERRORS.get('modules_design_waf_integrated', 'Module not found'))
+                    st.code(MODULE_ERRORS.get('waf_review_module', 'Module not found'))
         
-        with tabs[3]:  # EKS & Modernization
+        with tabs[3]:  # Architecture & Migration
+            render_architecture_migration_tab()
+        
+        with tabs[4]:  # Architecture Patterns
+            if MODULE_STATUS.get('Architecture Patterns'):
+                render_architecture_patterns_tab()
+            else:
+                st.error("❌ Architecture Patterns Module Not Loaded")
+                st.info("""
+                💡 To enable Architecture Patterns:
+                
+                ```
+                # 1. Ensure architecture_patterns.py is in your project directory
+                # 2. Check the error below for details
+                ```
+                """)
+                with st.expander("🔍 Error Details"):
+                    st.code(MODULE_ERRORS.get('architecture_patterns', 'Module not found'))
+        
+        with tabs[5]:  # EKS & Modernization
             if MODULE_STATUS.get('EKS & Modernization'):
                 if has_permission("run_aws_scans") if FIREBASE_AVAILABLE and not auth_disabled else True:
                     render_eks_modernization_hub()
@@ -1020,7 +1043,7 @@ def main():
                 with st.expander("🔍 Error Details"):
                     st.code(MODULE_ERRORS.get('eks_modernization', 'Module not found'))
         
-        with tabs[4]:  # User Management (Admin Only)
+        with tabs[6]:  # User Management (Admin Only)
             if FIREBASE_AVAILABLE and not auth_disabled:
                 render_admin_user_management()
             else:
@@ -1041,7 +1064,9 @@ def main():
         tabs = st.tabs([
             "📊 Dashboard",
             "🔌 AWS Connector",
-            "📐 Design & Well-Architected Hub",
+            "🏗️ WAF Assessment Hub",
+            "📤 Architecture & Migration",
+            "🏛️ Architecture Patterns",
             "🚀 EKS & Modernization"
         ])
         
@@ -1063,16 +1088,44 @@ def main():
                 with st.expander("🔍 Error Details"):
                     st.code(MODULE_ERRORS.get('aws_connector', 'Module not found'))
         
-        with tabs[2]:  # Design & Well-Architected Hub (INTEGRATED!)
-            if MODULE_STATUS.get('Design & WAF Hub'):
-                try:
-                    IntegratedDesignWAFHub.render()
-                except Exception as e:
-                    st.error(f"❌ Error loading Design & WAF Hub: {str(e)}")
+        with tabs[2]:
+            if MODULE_STATUS.get('WAF Review'):
+                if has_permission("run_aws_scans") if FIREBASE_AVAILABLE else True:
+                    render_waf_review_tab()
+                    
+                    # PDF Report Generation - Add after scan completes
+                    if st.session_state.get('assessment_completed') or st.session_state.get('multi_account_scan_completed'):
+                        # Check for multi-account results first
+                        if st.session_state.get('multi_account_scan_results'):
+                            render_pdf_report_buttons(
+                                assessments=st.session_state.multi_account_scan_results,
+                                accounts_config=st.session_state.get('selected_accounts_for_scan', []),
+                                scan_type="multi"
+                            )
+                        # Fall back to single account results
+                        elif st.session_state.get('assessment_results'):
+                            render_pdf_report_buttons(
+                                assessments=st.session_state.assessment_results,
+                                accounts_config=None,
+                                scan_type="single"
+                            )
+                else:
+                    st.warning("⚠️ You don't have permission to run AWS scans")
             else:
-                st.error("❌ Design & WAF Hub Not Loaded")
+                st.error("❌ WAF Assessment Hub Not Loaded")
+                with st.expander("🔍 Error Details"):
+                    st.code(MODULE_ERRORS.get('waf_review_module', 'Module not found'))
         
-        with tabs[3]:  # EKS & Modernization
+        with tabs[3]:
+            render_architecture_migration_tab()
+        
+        with tabs[4]:
+            if MODULE_STATUS.get('Architecture Patterns'):
+                render_architecture_patterns_tab()
+            else:
+                st.error("❌ Architecture Patterns Module Not Loaded")
+        
+        with tabs[5]:
             if MODULE_STATUS.get('EKS & Modernization'):
                 render_eks_modernization_hub()
             else:
@@ -1083,7 +1136,7 @@ def main():
         tabs = st.tabs([
             "📊 Dashboard",
             "🔌 AWS Connector",
-            "📐 Design & Well-Architected Hub"
+            "🏛️ Architecture Patterns"
         ])
         
         with tabs[0]:
@@ -1098,14 +1151,11 @@ def main():
                 st.error("❌ AWS Connector Module Not Loaded")
                 st.info("Contact your administrator to enable AWS Connector.")
         
-        with tabs[2]:  # Design & Well-Architected Hub (INTEGRATED!)
-            if MODULE_STATUS.get('Design & WAF Hub'):
-                try:
-                    IntegratedDesignWAFHub.render()
-                except Exception as e:
-                    st.error(f"❌ Error loading Design & WAF Hub: {str(e)}")
+        with tabs[2]:
+            if MODULE_STATUS.get('Architecture Patterns'):
+                render_architecture_patterns_tab()
             else:
-                st.error("❌ Design & WAF Hub Not Loaded")
+                st.error("❌ Architecture Patterns Module Not Loaded")
     
     st.markdown('<div class="app-footer">AWS Well-Architected Framework Advisor | Enterprise Edition v2.2 | Powered by Claude AI & Firebase 🔐</div>', unsafe_allow_html=True)
 
