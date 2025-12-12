@@ -40,24 +40,42 @@ def save_assessment_to_firebase(assessment_id: str, assessment_data: Dict) -> Tu
         user_email = st.session_state.get('user_email', 'anonymous')
         user_uid = st.session_state.get('user_uid', 'anonymous')
         
-        # Prepare assessment document
+        # Prepare assessment document - PRESERVE ALL FIELDS
         assessment_doc = {
             'assessment_id': assessment_id,
             'user_email': user_email,
             'user_uid': user_uid,
             'created_at': assessment_data.get('created_at', datetime.now().isoformat()),
             'updated_at': datetime.now().isoformat(),
-            'organization': assessment_data.get('organization', ''),
+            
+            # Assessment details
+            'name': assessment_data.get('name', ''),
             'workload_name': assessment_data.get('workload_name', ''),
+            'organization': assessment_data.get('organization', ''),
             'environment': assessment_data.get('environment', ''),
+            'type': assessment_data.get('type', ''),
             'industry': assessment_data.get('industry', ''),
+            'aws_account': assessment_data.get('aws_account', ''),
+            
+            # Assessment data
             'responses': assessment_data.get('responses', {}),
             'progress': assessment_data.get('progress', 0),
+            'scores': assessment_data.get('scores', {}),
             'pillar_scores': assessment_data.get('pillar_scores', {}),
             'overall_score': assessment_data.get('overall_score', 0),
+            'status': assessment_data.get('status', 'in_progress'),
+            'action_items': assessment_data.get('action_items', []),
+            
+            # Scanning features
+            'enable_scanning': assessment_data.get('enable_scanning', False),
+            'enable_ai': assessment_data.get('enable_ai', False),
+            'scan_results': assessment_data.get('scan_results'),
+            'auto_detected': assessment_data.get('auto_detected', {}),
+            
+            # Metadata
             'metadata': {
                 'version': assessment_data.get('version', '1.0'),
-                'total_questions': assessment_data.get('total_questions', 0),
+                'total_questions': assessment_data.get('questions_total', 205),
                 'answered_questions': len(assessment_data.get('responses', {})),
                 'ai_assistance_used': assessment_data.get('ai_assistance_used', 0),
                 'auto_detected_count': sum(1 for r in assessment_data.get('responses', {}).values() 

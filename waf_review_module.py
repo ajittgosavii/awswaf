@@ -1026,6 +1026,33 @@ def render_waf_review_tab():
     # Initialize session state
     if 'waf_assessments' not in st.session_state:
         st.session_state.waf_assessments = {}
+        
+        # LOAD ASSESSMENTS FROM FIREBASE
+        try:
+            from firebase_database_helper import list_user_assessments
+            
+            # Check if Firebase is initialized
+            if st.session_state.get('firebase_initialized', False):
+                # Load all user's assessments from Firebase
+                success, message, assessments_list = list_user_assessments()
+                
+                if success and assessments_list:
+                    # Convert list to dict keyed by assessment_id
+                    firebase_assessments = {}
+                    for assessment in assessments_list:
+                        assessment_id = assessment.get('assessment_id') or assessment.get('id')
+                        if assessment_id:
+                            firebase_assessments[assessment_id] = assessment
+                    
+                    st.session_state.waf_assessments = firebase_assessments
+                    
+                    # Show success message
+                    if len(firebase_assessments) > 0:
+                        st.toast(f"✅ Loaded {len(firebase_assessments)} assessment(s) from Firebase")
+        except Exception as e:
+            # If Firebase not available, just use empty dict
+            st.session_state.waf_assessments = {}
+    
     if 'current_waf_assessment_id' not in st.session_state:
         st.session_state.current_waf_assessment_id = None
     
@@ -1192,6 +1219,7 @@ def render_assessments_list():
                     assessment_id = str(uuid.uuid4())
                     
                     new_assessment = {
+                        'assessment_id': assessment_id,  # Added for Firebase compatibility
                         'id': assessment_id,
                         'name': assessment_name,
                         'workload_name': workload_name,
@@ -1201,6 +1229,7 @@ def render_assessments_list():
                         'created_at': datetime.now().isoformat(),
                         'updated_at': datetime.now().isoformat(),
                         'progress': 0,
+                        'overall_score': 0,
                         'responses': {},
                         'scores': {},
                         'action_items': [],
@@ -1211,9 +1240,25 @@ def render_assessments_list():
                         'auto_detected': {}
                     }
                     
+                    # Save to session state
                     st.session_state.waf_assessments[assessment_id] = new_assessment
                     st.session_state.current_waf_assessment_id = assessment_id
-                    st.success(f"✅ Created: {assessment_name}")
+                    
+                    # SAVE TO FIREBASE
+                    try:
+                        from firebase_database_helper import save_assessment_to_firebase
+                        
+                        if st.session_state.get('firebase_initialized', False):
+                            success, message = save_assessment_to_firebase(assessment_id, new_assessment)
+                            if success:
+                                st.success(f"✅ Created: {assessment_name} (Saved to Firebase)")
+                            else:
+                                st.success(f"✅ Created: {assessment_name} (Local only - Firebase: {message})")
+                        else:
+                            st.success(f"✅ Created: {assessment_name} (Local only)")
+                            st.info("💡 Enable Firebase to persist assessments across sessions")
+                    except:
+                        st.success(f"✅ Created: {assessment_name} (Local only)")
                     
                     # If scanning enabled, trigger scan on next screen
                     if enable_scanning:
