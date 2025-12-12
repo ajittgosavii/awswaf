@@ -34,7 +34,7 @@ def render_questions_with_pagination(assessment: Dict, questions: List, pillar_f
     
     # Filter questions by pillar if specified
     if pillar_filter:
-        filtered_questions = [q for q in questions if q.pillar.label == pillar_filter]
+        filtered_questions = [q for q in questions if q.pillar.value == pillar_filter]
     else:
         filtered_questions = questions
     
@@ -113,7 +113,7 @@ def render_questions_with_pagination(assessment: Dict, questions: List, pillar_f
     
     # Question header
     st.markdown(f"### 🔒 {current_question.id}: {current_question.text}")
-    st.caption(f"**Category:** {current_question.pillar.label} - {current_question.category}")
+    st.caption(f"**Category:** {current_question.pillar.value} - {current_question.category}")
     st.info(current_question.description)
     
     # Check for existing response
