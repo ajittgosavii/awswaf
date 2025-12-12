@@ -162,7 +162,13 @@ def generate_waf_pdf_report(assessment: Dict) -> bytes:
     overall_score = assessment.get('overall_score', 0)
     progress = assessment.get('progress', 0)
     total_responses = len(assessment.get('responses', {}))
-    action_items = assessment.get('action_items', [])
+    
+    # Get action items and ensure they're all dicts (defensive coding)
+    raw_action_items = assessment.get('action_items', [])
+    action_items = []
+    if raw_action_items and isinstance(raw_action_items, list):
+        # Filter to only include dict items
+        action_items = [item for item in raw_action_items if isinstance(item, dict)]
     
     # Determine status
     if overall_score >= 80:
@@ -371,10 +377,10 @@ def generate_waf_pdf_report(assessment: Dict) -> bytes:
     elements.append(Spacer(1, 0.15*inch))
     
     if action_items:
-        # Sort by priority and risk
-        critical_items = [i for i in action_items if i.get('risk_level', '').upper() == 'CRITICAL']
-        high_items = [i for i in action_items if i.get('risk_level', '').upper() == 'HIGH']
-        medium_items = [i for i in action_items if i.get('risk_level', '').upper() == 'MEDIUM']
+        # Sort by priority and risk - ensure all items are dicts
+        critical_items = [i for i in action_items if isinstance(i, dict) and i.get('risk_level', '').upper() == 'CRITICAL']
+        high_items = [i for i in action_items if isinstance(i, dict) and i.get('risk_level', '').upper() == 'HIGH']
+        medium_items = [i for i in action_items if isinstance(i, dict) and i.get('risk_level', '').upper() == 'MEDIUM']
         
         # Summary
         summary_para = Paragraph(
@@ -391,13 +397,25 @@ def generate_waf_pdf_report(assessment: Dict) -> bytes:
         if critical_items:
             elements.append(Paragraph("Critical Priority (Immediate Action Required)", styles['SubHeading']))
             for idx, item in enumerate(critical_items[:10], 1):  # Limit to first 10
-                item_text = f"<b>{idx}. [{item.get('pillar', 'Unknown')}] {item.get('title', 'Action Item')}</b><br/>"
-                item_text += f"{item.get('description', 'No description')[:200]}...<br/>"
-                item_text += f"<i>Priority: {item.get('priority', 'Unknown')} | "
-                item_text += f"Effort: {item.get('effort', 'Unknown')} | "
-                item_text += f"Cost: {item.get('cost', 'Unknown')}</i>"
-                elements.append(Paragraph(item_text, styles['BodyText']))
-                elements.append(Spacer(1, 0.1*inch))
+                try:
+                    # Safely get item fields with defaults
+                    pillar = item.get('pillar', 'Unknown') if isinstance(item, dict) else 'Unknown'
+                    title = item.get('title', 'Action Item') if isinstance(item, dict) else 'Action Item'
+                    description = item.get('description', 'No description') if isinstance(item, dict) else 'No description'
+                    priority = item.get('priority', 'Unknown') if isinstance(item, dict) else 'Unknown'
+                    effort = item.get('effort', 'Unknown') if isinstance(item, dict) else 'Unknown'
+                    cost = item.get('cost', 'Unknown') if isinstance(item, dict) else 'Unknown'
+                    
+                    item_text = f"<b>{idx}. [{pillar}] {title}</b><br/>"
+                    item_text += f"{description[:200]}...<br/>"
+                    item_text += f"<i>Priority: {priority} | "
+                    item_text += f"Effort: {effort} | "
+                    item_text += f"Cost: {cost}</i>"
+                    elements.append(Paragraph(item_text, styles['BodyText']))
+                    elements.append(Spacer(1, 0.1*inch))
+                except Exception as e:
+                    # Skip problematic items silently
+                    continue
             
             if len(critical_items) > 10:
                 elements.append(Paragraph(
@@ -410,11 +428,22 @@ def generate_waf_pdf_report(assessment: Dict) -> bytes:
         if high_items:
             elements.append(Paragraph("High Priority", styles['SubHeading']))
             for idx, item in enumerate(high_items[:8], 1):  # Limit to first 8
-                item_text = f"<b>{idx}. [{item.get('pillar', 'Unknown')}] {item.get('title', 'Action Item')}</b><br/>"
-                item_text += f"{item.get('description', 'No description')[:150]}...<br/>"
-                item_text += f"<i>Effort: {item.get('effort', 'Unknown')} | Cost: {item.get('cost', 'Unknown')}</i>"
-                elements.append(Paragraph(item_text, styles['BodyText']))
-                elements.append(Spacer(1, 0.08*inch))
+                try:
+                    # Safely get item fields
+                    pillar = item.get('pillar', 'Unknown') if isinstance(item, dict) else 'Unknown'
+                    title = item.get('title', 'Action Item') if isinstance(item, dict) else 'Action Item'
+                    description = item.get('description', 'No description') if isinstance(item, dict) else 'No description'
+                    effort = item.get('effort', 'Unknown') if isinstance(item, dict) else 'Unknown'
+                    cost = item.get('cost', 'Unknown') if isinstance(item, dict) else 'Unknown'
+                    
+                    item_text = f"<b>{idx}. [{pillar}] {title}</b><br/>"
+                    item_text += f"{description[:150]}...<br/>"
+                    item_text += f"<i>Effort: {effort} | Cost: {cost}</i>"
+                    elements.append(Paragraph(item_text, styles['BodyText']))
+                    elements.append(Spacer(1, 0.08*inch))
+                except Exception as e:
+                    # Skip problematic items
+                    continue
             
             if len(high_items) > 8:
                 elements.append(Paragraph(
@@ -435,8 +464,14 @@ def generate_waf_pdf_report(assessment: Dict) -> bytes:
             
             # Show first 3 medium items
             for idx, item in enumerate(medium_items[:3], 1):
-                item_text = f"{idx}. {item.get('title', 'Action Item')} ({item.get('pillar', 'Unknown')})"
-                elements.append(Paragraph(item_text, styles['BulletPoint']))
+                try:
+                    title = item.get('title', 'Action Item') if isinstance(item, dict) else 'Action Item'
+                    pillar = item.get('pillar', 'Unknown') if isinstance(item, dict) else 'Unknown'
+                    item_text = f"{idx}. {title} ({pillar})"
+                    elements.append(Paragraph(item_text, styles['BulletPoint']))
+                except Exception as e:
+                    # Skip problematic items
+                    continue
             
             if len(medium_items) > 3:
                 elements.append(Paragraph(
