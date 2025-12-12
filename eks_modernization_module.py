@@ -500,12 +500,28 @@ class EKSDesignWizard:
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total vCPUs Needed", f"{total_cpu_needed:.1f}")
         col2.metric("Total Memory Needed", f"{total_memory_needed:.1f} GB")
-        col3.metric("Recommended Nodes", f"{recommended_instances['node_count']}")
-        col4.metric("Monthly Cost (Est)", f"${recommended_instances['monthly_cost']:,.2f}")
+        
+        # DEFENSIVE CODING: Safe access to recommended instances
+        node_count = recommended_instances.get('node_count', 'N/A') if isinstance(recommended_instances, dict) else 'N/A'
+        monthly_cost = recommended_instances.get('monthly_cost', 0) if isinstance(recommended_instances, dict) else 0
+        
+        col3.metric("Recommended Nodes", f"{node_count}")
+        col4.metric("Monthly Cost (Est)", f"${monthly_cost:,.2f}" if isinstance(monthly_cost, (int, float)) else "N/A")
         
         st.markdown("**Recommended Instance Types:**")
-        for instance in recommended_instances['instances']:
-            st.markdown(f"- `{instance['type']}` - {instance['vcpu']} vCPU, {instance['memory']} GB RAM - ${instance['monthly_cost']:.2f}/month")
+        
+        # DEFENSIVE CODING: Safely iterate instances
+        instances = recommended_instances.get('instances', []) if isinstance(recommended_instances, dict) else []
+        if not instances:
+            st.info("No instance recommendations available")
+        else:
+            for instance in instances:
+                if isinstance(instance, dict):
+                    instance_type = instance.get('type', 'Unknown')
+                    vcpu = instance.get('vcpu', 0)
+                    memory = instance.get('memory', 0)
+                    cost = instance.get('monthly_cost', 0)
+                    st.markdown(f"- `{instance_type}` - {vcpu} vCPU, {memory} GB RAM - ${cost:.2f}/month")
     
     @staticmethod
     def step3_storage_data():
@@ -771,13 +787,20 @@ class EKSDesignWizard:
                 st.caption("💡 Configure AWS credentials in .streamlit/secrets.toml for real-time pricing")
         
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Monthly Cost", f"${cost_estimate['total']:,.2f}")
-        col2.metric("Compute Cost", f"${cost_estimate['compute']:,.2f}")
-        col3.metric("Storage Cost", f"${cost_estimate['storage']:,.2f}")
-        col4.metric("Network Cost", f"${cost_estimate['network']:,.2f}")
+        
+        # DEFENSIVE CODING: Safe access to cost estimate values
+        total_cost = cost_estimate.get('total', 0) if isinstance(cost_estimate, dict) else 0
+        compute_cost = cost_estimate.get('compute', 0) if isinstance(cost_estimate, dict) else 0
+        storage_cost = cost_estimate.get('storage', 0) if isinstance(cost_estimate, dict) else 0
+        network_cost = cost_estimate.get('network', 0) if isinstance(cost_estimate, dict) else 0
+        
+        col1.metric("Monthly Cost", f"${total_cost:,.2f}")
+        col2.metric("Compute Cost", f"${compute_cost:,.2f}")
+        col3.metric("Storage Cost", f"${storage_cost:,.2f}")
+        col4.metric("Network Cost", f"${network_cost:,.2f}")
         
         if spec.monthly_budget > 0:
-            budget_status = "✅ Within Budget" if cost_estimate['total'] <= spec.monthly_budget else "⚠️ Over Budget"
+            budget_status = "✅ Within Budget" if total_cost <= spec.monthly_budget else "⚠️ Over Budget"
             st.info(f"{budget_status} - Budget: ${spec.monthly_budget:,.2f}")
         
         # AI Validation
@@ -857,16 +880,58 @@ class EKSDesignWizard:
         
         if results.get('recommendations'):
             st.markdown("### 🎯 AI Recommendations")
-            for rec in results['recommendations'][:10]:
-                with st.expander(f"{rec['priority']}: {rec['title']}", expanded=rec['priority']=='CRITICAL'):
-                    st.markdown(rec['description'])
-                    if rec.get('action'):
-                        st.markdown(f"**Action:** {rec['action']}")
+            
+            # DEFENSIVE CODING: Filter to only valid dict items
+            raw_recommendations = results['recommendations'][:10]
+            valid_recommendations = [r for r in raw_recommendations if isinstance(r, dict)]
+            
+            if not valid_recommendations:
+                st.info("No structured recommendations available at this time")
+            else:
+                for rec in valid_recommendations:
+                    try:
+                        # Safe access with defaults
+                        priority = rec.get('priority', 'MEDIUM')
+                        title = rec.get('title', 'Recommendation')
+                        description = rec.get('description', 'No description available')
+                        
+                        # Determine if should be expanded
+                        is_critical = str(priority).upper() == 'CRITICAL'
+                        
+                        with st.expander(f"{priority}: {title}", expanded=is_critical):
+                            st.markdown(description)
+                            
+                            # Additional fields if present
+                            if rec.get('action'):
+                                st.markdown(f"**Action:** {rec['action']}")
+                            if rec.get('impact'):
+                                st.caption(f"**Impact:** {rec['impact']}")
+                            if rec.get('remediation'):
+                                st.caption(f"**Remediation:** {rec['remediation']}")
+                    
+                    except (KeyError, TypeError, AttributeError) as e:
+                        # Skip invalid recommendations silently
+                        st.warning(f"⚠️ Skipping invalid recommendation: {str(e)}")
+                        continue
         
         if results.get('issues'):
             st.markdown("### ⚠️ Issues Found")
-            for issue in results['issues']:
-                st.warning(f"**{issue['severity']}:** {issue['description']}")
+            
+            # DEFENSIVE CODING: Filter to only valid dict items
+            raw_issues = results['issues']
+            valid_issues = [i for i in raw_issues if isinstance(i, dict)]
+            
+            if not valid_issues:
+                st.info("No structured issues to display")
+            else:
+                for issue in valid_issues:
+                    try:
+                        severity = issue.get('severity', 'MEDIUM')
+                        description = issue.get('description', 'No description available')
+                        st.warning(f"**{severity}:** {description}")
+                    except (KeyError, TypeError, AttributeError) as e:
+                        st.warning(f"⚠️ Skipping invalid issue: {str(e)}")
+                        continue
     
     @staticmethod
     def _display_basic_validation(validation: Dict):
@@ -875,9 +940,26 @@ class EKSDesignWizard:
         
         for category, checks in validation.items():
             with st.expander(f"📋 {category.replace('_', ' ').title()}", expanded=True):
+                # DEFENSIVE CODING: Ensure checks is a list
+                if not isinstance(checks, list):
+                    st.warning(f"Invalid checks format for {category}")
+                    continue
+                
                 for check in checks:
-                    icon = "✅" if check['passed'] else "⚠️"
-                    st.markdown(f"{icon} {check['message']}")
+                    try:
+                        # Handle both dict and string checks
+                        if isinstance(check, dict):
+                            passed = check.get('passed', False)
+                            message = check.get('message', 'No message')
+                            icon = "✅" if passed else "⚠️"
+                            st.markdown(f"{icon} {message}")
+                        elif isinstance(check, str):
+                            st.markdown(f"ℹ️ {check}")
+                        else:
+                            continue
+                    except (KeyError, TypeError, AttributeError) as e:
+                        st.warning(f"⚠️ Invalid check item: {str(e)}")
+                        continue
 
 # ============================================================================
 # SIZING CALCULATOR
