@@ -2503,31 +2503,91 @@ Be conversational, practical, and avoid jargon. Focus on actionable advice."""
         }
 
 def render_ai_insights_tab(assessment: Dict):
-    """Render AI-powered insights"""
-    st.markdown("### 🤖 AI-Powered Insights")
+    """Render AI-powered insights with comprehensive pillar-wise analysis"""
+    st.markdown("### 🤖 AI-Powered Insights & Recommendations")
     
     if not ANTHROPIC_AVAILABLE:
         st.warning("⚠️ Anthropic API not available. Install with: `pip install anthropic`")
-        st.info("💡 Add your API key to Streamlit secrets to enable AI insights.")
+        st.info("💡 Add your ANTHROPIC_API_KEY to Streamlit secrets to enable AI insights.")
         return
     
-    if not assessment.get('responses'):
+    # Check if assessment has enough responses
+    responses = assessment.get('responses', {})
+    progress = assessment.get('progress', 0)
+    
+    if not responses:
         st.info("📝 Complete some assessment questions to generate AI insights.")
         return
     
-    if st.button("🚀 Generate AI Insights", use_container_width=True):
-        with st.spinner("🤖 Claude is analyzing your assessment..."):
-            # Placeholder for AI analysis
-            st.success("✅ AI analysis complete!")
-            st.markdown("""
-            ### 📊 Executive Summary
-            Your AWS architecture shows strong foundations with opportunities for improvement...
+    if progress < 50:
+        st.warning(f"⚠️ Assessment is only {progress}% complete. For best insights, complete at least 50% of questions.")
+    
+    # Show what we'll analyze
+    st.info(f"""
+    **Ready to analyze:**
+    - {len(responses)} questions answered ({progress}% complete)
+    - Overall Score: {assessment.get('overall_score', 0)}/100
+    - {len(assessment.get('scores', {}))} pillars evaluated
+    
+    Claude AI will provide comprehensive insights based on your responses.
+    """)
+    
+    # Check if insights are already cached in session state
+    cache_key = f"ai_insights_{assessment.get('id', 'unknown')}"
+    
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        generate_button = st.button(
+            "🚀 Generate Comprehensive AI Insights",
+            use_container_width=True,
+            type="primary"
+        )
+    
+    with col2:
+        if cache_key in st.session_state:
+            if st.button("🔄 Regenerate", use_container_width=True):
+                # Clear cache to regenerate
+                del st.session_state[cache_key]
+                st.rerun()
+    
+    # Generate or show cached insights
+    if generate_button or cache_key in st.session_state:
+        
+        if cache_key not in st.session_state:
+            # Generate new insights
+            with st.spinner("🤖 Claude is analyzing your assessment... This may take 30-60 seconds."):
+                try:
+                    # Import AI insights generator
+                    from ai_insights_generator import generate_comprehensive_insights, format_insights_for_display
+                    
+                    # Get all questions
+                    questions = get_complete_waf_questions()
+                    
+                    # Generate insights
+                    insights = generate_comprehensive_insights(assessment, questions)
+                    
+                    # Cache the results
+                    st.session_state[cache_key] = insights
+                    
+                    st.success("✅ AI analysis complete!")
+                    
+                except Exception as e:
+                    st.error(f"❌ Failed to generate insights: {str(e)}")
+                    st.exception(e)
+                    return
+        
+        # Display insights
+        try:
+            from ai_insights_generator import format_insights_for_display
+            insights = st.session_state[cache_key]
             
-            ### 🎯 Key Recommendations
-            1. **Security**: Enable AWS GuardDuty for threat detection
-            2. **Cost**: Right-size EC2 instances for 30% savings
-            3. **Reliability**: Implement multi-AZ deployment
-            """)
+            st.divider()
+            format_insights_for_display(insights)
+            
+        except Exception as e:
+            st.error(f"❌ Failed to display insights: {str(e)}")
+            st.exception(e)
 
 def render_action_items_tab(assessment: Dict):
     """Render action items"""
