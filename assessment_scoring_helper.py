@@ -137,19 +137,22 @@ def generate_action_items(assessment: Dict, questions: List) -> None:
             response = responses[question.id]
             risk_level = response.get('risk_level', 'NONE')
             
+            # FIX: Use case-insensitive comparison (risk_level is stored as "High", not "HIGH")
+            risk_level_upper = risk_level.upper() if isinstance(risk_level, str) else str(risk_level).upper()
+            
             # Generate action items for CRITICAL, HIGH, and MEDIUM risks
-            if risk_level in ['CRITICAL', 'HIGH', 'MEDIUM']:
+            if risk_level_upper in ['CRITICAL', 'HIGH', 'MEDIUM']:
                 # Get question details
                 question_text = question.text if hasattr(question, 'text') else 'Unknown Question'
                 question_desc = question.description if hasattr(question, 'description') else ''
                 question_pillar = question.pillar.value if hasattr(question, 'pillar') else 'Unknown'
                 
                 # Determine priority
-                if risk_level == 'CRITICAL':
+                if risk_level_upper == 'CRITICAL':
                     priority = 1
                     effort = '1-2 weeks'
                     cost = '$$$$'
-                elif risk_level == 'HIGH':
+                elif risk_level_upper == 'HIGH':
                     priority = 2
                     effort = '1 week'
                     cost = '$$$'

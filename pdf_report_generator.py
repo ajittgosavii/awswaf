@@ -1,424 +1,275 @@
 """
-PDF Report Generator Module
-Generate comprehensive WAF assessment reports in PDF format
+PDF Report Generator for WAF Assessments
+Generates professional PDF reports using reportlab
 
 Features:
-- Executive summary with key metrics
-- Detailed pillar assessments
-- Findings with remediation steps
-- Resource inventory
-- Remediation roadmap
-- Professional formatting
+- Cover page with branding
+- Executive summary
+- Pillar scores visualization
+- Action items with priorities
+- Detailed findings
 """
 
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from io import BytesIO
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict
+import streamlit as st
 
-# ============================================================================
-# PDF GENERATION
-# ============================================================================
 
-def generate_comprehensive_waf_report(assessment) -> bytes:
-    """Generate comprehensive PDF report from assessment"""
+def generate_waf_pdf_report(assessment: Dict) -> bytes:
+    """Generate a comprehensive PDF report for the WAF assessment"""
     
-    try:
-        from reportlab.lib import colors
-        from reportlab.lib.pagesizes import letter
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import inch
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
-        from reportlab.platypus import (
-            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-            PageBreak, HRFlowable, ListFlowable, ListItem
-        )
-    except ImportError:
-        raise ImportError("reportlab is required for PDF generation")
-    
+    # Create PDF in memory
     buffer = BytesIO()
-    
     doc = SimpleDocTemplate(
         buffer,
         pagesize=letter,
-        rightMargin=0.75*inch,
-        leftMargin=0.75*inch,
-        topMargin=1*inch,
-        bottomMargin=0.75*inch
+        rightMargin=72,
+        leftMargin=72,
+        topMargin=72,
+        bottomMargin=18,
     )
     
-    # Styles
-    styles = getSampleStyleSheet()
-    
-    # Custom styles
-    styles.add(ParagraphStyle(
-        name='MainTitle',
-        parent=styles['Title'],
-        fontSize=28,
-        textColor=colors.HexColor('#232F3E'),
-        spaceAfter=20
-    ))
-    
-    styles.add(ParagraphStyle(
-        name='SubTitle',
-        parent=styles['Normal'],
-        fontSize=14,
-        textColor=colors.HexColor('#FF9900'),
-        spaceAfter=30
-    ))
-    
-    styles.add(ParagraphStyle(
-        name='SectionHeader',
-        parent=styles['Heading1'],
-        fontSize=18,
-        textColor=colors.HexColor('#232F3E'),
-        spaceBefore=25,
-        spaceAfter=15,
-        borderWidth=0,
-        borderPadding=0
-    ))
-    
-    styles.add(ParagraphStyle(
-        name='SubSection',
-        parent=styles['Heading2'],
-        fontSize=14,
-        textColor=colors.HexColor('#37475A'),
-        spaceBefore=15,
-        spaceAfter=10
-    ))
-    
-    styles.add(ParagraphStyle(
-        name='BodyText',
-        parent=styles['Normal'],
-        fontSize=10,
-        alignment=TA_JUSTIFY,
-        spaceAfter=8
-    ))
-    
-    styles.add(ParagraphStyle(
-        name='FindingTitle',
-        parent=styles['Normal'],
-        fontSize=11,
-        textColor=colors.HexColor('#1976D2'),
-        fontName='Helvetica-Bold',
-        spaceAfter=5
-    ))
-    
+    # Container for the 'Flowable' objects
     elements = []
     
-    # =========================================================================
-    # COVER PAGE
-    # =========================================================================
+    # Define styles
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(
+        name='CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#1f77b4'),
+        spaceAfter=30,
+        alignment=TA_CENTER
+    ))
+    styles.add(ParagraphStyle(
+        name='SectionHeading',
+        parent=styles['Heading2'],
+        fontSize=16,
+        textColor=colors.HexColor('#2c3e50'),
+        spaceAfter=12,
+        spaceBefore=12
+    ))
+    styles.add(ParagraphStyle(
+        name='SubHeading',
+        parent=styles['Heading3'],
+        fontSize=12,
+        textColor=colors.HexColor('#34495e'),
+        spaceAfter=6
+    ))
     
-    elements.append(Spacer(1, 2*inch))
-    elements.append(Paragraph("AWS Well-Architected", styles['MainTitle']))
-    elements.append(Paragraph("Framework Review Report", styles['MainTitle']))
-    elements.append(Spacer(1, 0.5*inch))
-    elements.append(Paragraph("AI-Powered Architecture Assessment", styles['SubTitle']))
+    # Cover Page
+    title = Paragraph("AWS Well-Architected<br/>Framework Assessment", styles['CustomTitle'])
+    elements.append(title)
     elements.append(Spacer(1, 0.5*inch))
     
     # Assessment info
-    elements.append(Paragraph(f"Assessment Date: {assessment.timestamp.strftime('%B %d, %Y')}", styles['BodyText']))
-    elements.append(Paragraph(f"Assessment ID: {assessment.assessment_id}", styles['BodyText']))
-    elements.append(Paragraph(f"Regions Scanned: {', '.join(assessment.regions_scanned)}", styles['BodyText']))
+    assessment_name = assessment.get('name', 'Unnamed Assessment')
+    workload_name = assessment.get('workload_name', 'N/A')
+    environment = assessment.get('environment', 'N/A')
+    created_date = assessment.get('created_at', datetime.now().isoformat())[:10]
     
-    elements.append(Spacer(1, 1*inch))
-    
-    # Score display
-    score_color = colors.HexColor('#388E3C') if assessment.overall_score >= 80 else \
-                  colors.HexColor('#FBC02D') if assessment.overall_score >= 60 else \
-                  colors.HexColor('#D32F2F')
-    
-    elements.append(Paragraph(
-        f"<font size='48' color='{score_color}'><b>{assessment.overall_score}</b></font>",
-        ParagraphStyle('ScoreStyle', parent=styles['Title'], alignment=TA_CENTER)
-    ))
-    elements.append(Paragraph("Overall WAF Score", styles['SubTitle']))
-    elements.append(Paragraph(f"Risk Level: <b>{assessment.overall_risk}</b>", styles['BodyText']))
-    
-    elements.append(PageBreak())
-    
-    # =========================================================================
-    # EXECUTIVE SUMMARY
-    # =========================================================================
-    
-    elements.append(Paragraph("Executive Summary", styles['SectionHeader']))
-    elements.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#FF9900')))
-    elements.append(Spacer(1, 15))
-    
-    # Key metrics
-    critical_count = sum(1 for f in assessment.findings if f.severity == 'CRITICAL')
-    high_count = sum(1 for f in assessment.findings if f.severity == 'HIGH')
-    medium_count = sum(1 for f in assessment.findings if f.severity == 'MEDIUM')
-    
-    summary = f"""This Well-Architected Framework Review provides a comprehensive assessment of your AWS environment 
-    against the six pillars of the AWS Well-Architected Framework. The assessment identified 
-    <b>{len(assessment.findings)} findings</b>, including <b>{critical_count} critical</b> and 
-    <b>{high_count} high</b> severity issues requiring immediate attention.
-    
-    Your overall WAF score is <b>{assessment.overall_score}/100</b>, indicating a <b>{assessment.overall_risk}</b> 
-    risk level. The assessment covers Security, Reliability, Performance Efficiency, Cost Optimization, 
-    Operational Excellence, and Sustainability pillars."""
-    
-    elements.append(Paragraph(summary, styles['BodyText']))
-    elements.append(Spacer(1, 20))
-    
-    # Summary metrics table
-    metrics_data = [
-        ['Metric', 'Value', 'Status'],
-        ['Overall Score', f'{assessment.overall_score}/100', assessment.overall_risk],
-        ['Total Findings', str(len(assessment.findings)), ''],
-        ['Critical Issues', str(critical_count), 'Immediate Action' if critical_count > 0 else 'None'],
-        ['High Issues', str(high_count), 'Urgent' if high_count > 0 else 'None'],
-        ['Medium Issues', str(medium_count), 'Plan' if medium_count > 0 else 'None'],
-        ['Potential Savings', f'${assessment.savings_opportunities:,.0f}/mo', ''],
+    info_data = [
+        ['Assessment:', assessment_name],
+        ['Workload:', workload_name],
+        ['Environment:', environment],
+        ['Date:', created_date],
+        ['Overall Score:', f"{assessment.get('overall_score', 0)}/100"],
+        ['Progress:', f"{assessment.get('progress', 0)}%"],
     ]
     
-    table = Table(metrics_data, colWidths=[2.5*inch, 1.5*inch, 2*inch])
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#232F3E')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F5F5F5')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
+    info_table = Table(info_data, colWidths=[2*inch, 4*inch])
+    info_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#ecf0f1')),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
+        ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey),
     ]))
-    elements.append(table)
     
+    elements.append(info_table)
+    elements.append(Spacer(1, 0.5*inch))
+    
+    footer_text = Paragraph(
+        f"<i>Generated on {datetime.now().strftime('%B %d, %Y at %I:%M %p')}<br/>"
+        f"Powered by Claude AI & Firebase</i>",
+        styles['Normal']
+    )
+    elements.append(Spacer(1, 2*inch))
+    elements.append(footer_text)
     elements.append(PageBreak())
     
-    # =========================================================================
-    # PILLAR SCORES
-    # =========================================================================
+    # Executive Summary
+    elements.append(Paragraph("Executive Summary", styles['SectionHeading']))
+    elements.append(Spacer(1, 0.2*inch))
     
-    elements.append(Paragraph("Pillar Assessment Scores", styles['SectionHeader']))
-    elements.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#FF9900')))
-    elements.append(Spacer(1, 15))
+    overall_score = assessment.get('overall_score', 0)
+    progress = assessment.get('progress', 0)
+    total_responses = len(assessment.get('responses', {}))
     
-    pillar_data = [['Pillar', 'Score', 'Critical', 'High', 'Medium', 'Status']]
+    if overall_score >= 80:
+        assessment_status = "Excellent"
+        status_color = "green"
+    elif overall_score >= 60:
+        assessment_status = "Good"
+        status_color = "blue"
+    elif overall_score >= 40:
+        assessment_status = "Needs Improvement"
+        status_color = "orange"
+    else:
+        assessment_status = "Critical"
+        status_color = "red"
     
-    for pillar_name, ps in assessment.pillar_scores.items():
-        if ps.score >= 80:
-            status = 'Good'
-        elif ps.score >= 60:
-            status = 'Needs Work'
-        else:
-            status = 'At Risk'
+    summary_text = f"""
+    Your AWS architecture has been assessed using the Well-Architected Framework. 
+    The assessment is <b>{progress:.0f}% complete</b> with <b>{total_responses} questions</b> answered 
+    across all six pillars. Your overall score is <b>{overall_score}/100</b>, 
+    indicating a <b><font color="{status_color}">{assessment_status}</font></b> architectural posture.
+    """
+    
+    elements.append(Paragraph(summary_text, styles['Normal']))
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Pillar Scores
+    elements.append(Paragraph("Pillar Scores", styles['SectionHeading']))
+    elements.append(Spacer(1, 0.2*inch))
+    
+    pillar_scores = assessment.get('scores', {})
+    
+    if pillar_scores:
+        pillar_data = [['Pillar', 'Score', 'Status']]
         
-        pillar_data.append([
-            pillar_name,
-            f'{ps.score}/100',
-            str(ps.critical_count),
-            str(ps.high_count),
-            str(ps.medium_count),
-            status
-        ])
+        for pillar_name, score in pillar_scores.items():
+            if score >= 80:
+                status = "Excellent ✓"
+            elif score >= 60:
+                status = "Good"
+            elif score >= 40:
+                status = "Needs Improvement"
+            else:
+                status = "Critical ⚠"
+            
+            pillar_data.append([pillar_name, f"{score}/100", status])
+        
+        pillar_table = Table(pillar_data, colWidths=[3*inch, 1.5*inch, 2*inch])
+        pillar_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+            ('ALIGN', (2, 0), (2, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        
+        elements.append(pillar_table)
+    else:
+        elements.append(Paragraph("No pillar scores available.", styles['Normal']))
     
-    pillar_table = Table(pillar_data, colWidths=[2*inch, 0.8*inch, 0.7*inch, 0.7*inch, 0.8*inch, 1*inch])
-    pillar_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#232F3E')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F5F5')]),
-    ]))
-    elements.append(pillar_table)
+    elements.append(Spacer(1, 0.3*inch))
     
+    # Action Items
     elements.append(PageBreak())
+    elements.append(Paragraph("Action Items", styles['SectionHeading']))
+    elements.append(Spacer(1, 0.2*inch))
     
-    # =========================================================================
-    # DETAILED FINDINGS
-    # =========================================================================
+    action_items = assessment.get('action_items', [])
     
-    elements.append(Paragraph("Detailed Findings", styles['SectionHeader']))
-    elements.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#FF9900')))
-    elements.append(Spacer(1, 15))
-    
-    severity_colors = {
-        'CRITICAL': colors.HexColor('#D32F2F'),
-        'HIGH': colors.HexColor('#F57C00'),
-        'MEDIUM': colors.HexColor('#FBC02D'),
-        'LOW': colors.HexColor('#388E3C')
-    }
-    
-    for severity in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
-        sev_findings = [f for f in assessment.findings if f.severity == severity]
-        if not sev_findings:
-            continue
+    if action_items:
+        sorted_items = sorted(action_items, key=lambda x: x.get('priority', 999))
         
+        critical_items = [item for item in sorted_items if item.get('risk_level', '').upper() == 'CRITICAL']
+        high_items = [item for item in sorted_items if item.get('risk_level', '').upper() == 'HIGH']
+        medium_items = [item for item in sorted_items if item.get('risk_level', '').upper() == 'MEDIUM']
+        
+        if critical_items:
+            elements.append(Paragraph("Critical Priority", styles['SubHeading']))
+            for idx, item in enumerate(critical_items, 1):
+                item_text = f"""
+                <b>{idx}. {item.get('pillar', 'Unknown')}</b><br/>
+                {item.get('title', 'No title')[:100]}...<br/>
+                <i>Effort: {item.get('effort', 'Unknown')} | Cost: {item.get('cost', 'Unknown')}</i>
+                """
+                elements.append(Paragraph(item_text, styles['Normal']))
+                elements.append(Spacer(1, 0.1*inch))
+        
+        if high_items:
+            elements.append(Spacer(1, 0.2*inch))
+            elements.append(Paragraph("High Priority", styles['SubHeading']))
+            for idx, item in enumerate(high_items, 1):
+                item_text = f"""
+                <b>{idx}. {item.get('pillar', 'Unknown')}</b><br/>
+                {item.get('title', 'No title')[:100]}...<br/>
+                <i>Effort: {item.get('effort', 'Unknown')} | Cost: {item.get('cost', 'Unknown')}</i>
+                """
+                elements.append(Paragraph(item_text, styles['Normal']))
+                elements.append(Spacer(1, 0.1*inch))
+        
+        if medium_items:
+            elements.append(Spacer(1, 0.2*inch))
+            elements.append(Paragraph("Medium Priority", styles['SubHeading']))
+            for idx, item in enumerate(medium_items[:10], 1):
+                item_text = f"""
+                <b>{idx}. {item.get('pillar', 'Unknown')}</b><br/>
+                {item.get('title', 'No title')[:100]}...<br/>
+                <i>Effort: {item.get('effort', 'Unknown')} | Cost: {item.get('cost', 'Unknown')}</i>
+                """
+                elements.append(Paragraph(item_text, styles['Normal']))
+                elements.append(Spacer(1, 0.1*inch))
+            
+            if len(medium_items) > 10:
+                elements.append(Paragraph(
+                    f"<i>... and {len(medium_items) - 10} more medium priority items</i>",
+                    styles['Normal']
+                ))
+    
+    else:
         elements.append(Paragraph(
-            f"<font color='{severity_colors[severity]}'><b>{severity} Findings ({len(sev_findings)})</b></font>",
-            styles['SubSection']
+            "No action items identified. Your architecture is well-optimized!",
+            styles['Normal']
         ))
-        
-        for finding in sev_findings[:10]:  # Limit to 10 per severity
-            elements.append(Paragraph(finding.title, styles['FindingTitle']))
-            elements.append(Paragraph(f"<b>Pillar:</b> {finding.pillar} | <b>Service:</b> {finding.source_service}", styles['BodyText']))
-            elements.append(Paragraph(f"<b>Description:</b> {finding.description}", styles['BodyText']))
-            
-            if finding.affected_resources:
-                resources = ', '.join(finding.affected_resources[:5])
-                elements.append(Paragraph(f"<b>Affected Resources:</b> {resources}", styles['BodyText']))
-            
-            if finding.recommendation:
-                elements.append(Paragraph(f"<b>Recommendation:</b> {finding.recommendation}", styles['BodyText']))
-            
-            if finding.remediation_steps:
-                elements.append(Paragraph("<b>Remediation Steps:</b>", styles['BodyText']))
-                for i, step in enumerate(finding.remediation_steps[:5], 1):
-                    elements.append(Paragraph(f"  {i}. {step}", styles['BodyText']))
-            
-            if finding.estimated_savings > 0:
-                elements.append(Paragraph(f"<b>Potential Savings:</b> ${finding.estimated_savings:,.0f}/month", styles['BodyText']))
-            
-            elements.append(Spacer(1, 10))
-        
-        if len(sev_findings) > 10:
-            elements.append(Paragraph(f"<i>... and {len(sev_findings) - 10} more {severity} findings</i>", styles['BodyText']))
-        
-        elements.append(Spacer(1, 15))
     
+    # Conclusion
     elements.append(PageBreak())
+    elements.append(Paragraph("Conclusion & Next Steps", styles['SectionHeading']))
+    elements.append(Spacer(1, 0.2*inch))
     
-    # =========================================================================
-    # RESOURCE INVENTORY
-    # =========================================================================
+    conclusion_text = f"""
+    This assessment provides a comprehensive view of your AWS architecture's alignment 
+    with the Well-Architected Framework. With an overall score of <b>{overall_score}/100</b>, 
+    there are clear opportunities for improvement.
+    <br/><br/>
+    <b>Recommended Next Steps:</b><br/>
+    1. Review and prioritize the critical action items<br/>
+    2. Create a remediation roadmap with timelines<br/>
+    3. Assign owners for each action item<br/>
+    4. Schedule regular reassessments (quarterly recommended)<br/>
+    5. Track progress using AWS Well-Architected Tool or this platform
+    <br/><br/>
+    <i>For detailed recommendations and AI-powered insights, visit the AI Insights tab in the application.</i>
+    """
     
-    elements.append(Paragraph("Resource Inventory", styles['SectionHeader']))
-    elements.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#FF9900')))
-    elements.append(Spacer(1, 15))
-    
-    inv = assessment.inventory
-    
-    # Compute resources
-    elements.append(Paragraph("Compute Resources", styles['SubSection']))
-    compute_data = [
-        ['Resource Type', 'Count', 'Details'],
-        ['EC2 Instances', str(inv.ec2_instances), f'{inv.ec2_running} running'],
-        ['Lambda Functions', str(inv.lambda_functions), ''],
-        ['EKS Clusters', str(inv.eks_clusters), ''],
-        ['ECS Clusters', str(inv.ecs_clusters), ''],
-    ]
-    
-    compute_table = Table(compute_data, colWidths=[2.5*inch, 1.5*inch, 2*inch])
-    compute_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#37475A')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
-    ]))
-    elements.append(compute_table)
-    elements.append(Spacer(1, 15))
-    
-    # Storage resources
-    elements.append(Paragraph("Storage & Database", styles['SubSection']))
-    storage_data = [
-        ['Resource Type', 'Count', 'Details'],
-        ['S3 Buckets', str(inv.s3_buckets), f'{inv.s3_public} public'],
-        ['EBS Volumes', str(inv.ebs_volumes), f'{inv.ebs_unattached} unattached'],
-        ['RDS Instances', str(inv.rds_instances), f'{inv.rds_multi_az} Multi-AZ'],
-    ]
-    
-    storage_table = Table(storage_data, colWidths=[2.5*inch, 1.5*inch, 2*inch])
-    storage_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#37475A')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
-    ]))
-    elements.append(storage_table)
-    elements.append(Spacer(1, 15))
-    
-    # Security resources
-    elements.append(Paragraph("Security & IAM", styles['SubSection']))
-    security_data = [
-        ['Resource Type', 'Count', 'Details'],
-        ['IAM Users', str(inv.iam_users), f'{inv.iam_users_no_mfa} without MFA'],
-        ['IAM Roles', str(inv.iam_roles), ''],
-        ['Security Groups', str(inv.security_groups), ''],
-        ['VPCs', str(inv.vpcs), ''],
-    ]
-    
-    security_table = Table(security_data, colWidths=[2.5*inch, 1.5*inch, 2*inch])
-    security_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#37475A')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.lightgrey),
-    ]))
-    elements.append(security_table)
-    
-    elements.append(PageBreak())
-    
-    # =========================================================================
-    # REMEDIATION ROADMAP
-    # =========================================================================
-    
-    elements.append(Paragraph("Remediation Roadmap", styles['SectionHeader']))
-    elements.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#FF9900')))
-    elements.append(Spacer(1, 15))
-    
-    elements.append(Paragraph("Immediate Actions (0-30 days)", styles['SubSection']))
-    immediate = [f for f in assessment.findings if f.severity in ['CRITICAL', 'HIGH'] and f.effort == 'Low']
-    for finding in immediate[:5]:
-        elements.append(Paragraph(f"• <b>{finding.title}</b>: {finding.recommendation[:100]}", styles['BodyText']))
-    
-    elements.append(Spacer(1, 10))
-    
-    elements.append(Paragraph("Short-term Actions (30-90 days)", styles['SubSection']))
-    short_term = [f for f in assessment.findings if f.severity in ['HIGH', 'MEDIUM'] and f.effort == 'Medium']
-    for finding in short_term[:5]:
-        elements.append(Paragraph(f"• <b>{finding.title}</b>: {finding.recommendation[:100]}", styles['BodyText']))
-    
-    elements.append(Spacer(1, 10))
-    
-    elements.append(Paragraph("Medium-term Actions (90+ days)", styles['SubSection']))
-    medium_term = [f for f in assessment.findings if f.effort == 'High']
-    for finding in medium_term[:5]:
-        elements.append(Paragraph(f"• <b>{finding.title}</b>: {finding.recommendation[:100]}", styles['BodyText']))
-    
-    # =========================================================================
-    # COST OPTIMIZATION
-    # =========================================================================
-    
-    if assessment.savings_opportunities > 0:
-        elements.append(Spacer(1, 20))
-        elements.append(Paragraph("Cost Optimization Summary", styles['SectionHeader']))
-        elements.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor('#FF9900')))
-        elements.append(Spacer(1, 15))
-        
-        elements.append(Paragraph(
-            f"Total Monthly Savings Potential: <b>${assessment.savings_opportunities:,.0f}</b>",
-            styles['BodyText']
-        ))
-        elements.append(Paragraph(
-            f"Total Annual Savings Potential: <b>${assessment.savings_opportunities * 12:,.0f}</b>",
-            styles['BodyText']
-        ))
-        
-        elements.append(Spacer(1, 10))
-        
-        savings_findings = [f for f in assessment.findings if f.estimated_savings > 0]
-        savings_findings.sort(key=lambda x: x.estimated_savings, reverse=True)
-        
-        for finding in savings_findings[:5]:
-            elements.append(Paragraph(
-                f"• {finding.title}: <b>${finding.estimated_savings:,.0f}/month</b>",
-                styles['BodyText']
-            ))
+    elements.append(Paragraph(conclusion_text, styles['Normal']))
     
     # Build PDF
     doc.build(elements)
+    
+    # Get PDF bytes
     pdf_bytes = buffer.getvalue()
     buffer.close()
     
     return pdf_bytes
-
-# Export
-__all__ = ['generate_comprehensive_waf_report']

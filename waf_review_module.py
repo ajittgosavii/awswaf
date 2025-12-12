@@ -1931,7 +1931,34 @@ def render_full_report(assessment: Dict):
     
     with col2:
         if st.button("📥 Export PDF", use_container_width=True):
-            st.info("PDF export coming soon!")
+            try:
+                # Import PDF generator
+                from pdf_report_generator import generate_waf_pdf_report
+                
+                with st.spinner("📄 Generating PDF report..."):
+                    # Generate PDF
+                    pdf_bytes = generate_waf_pdf_report(assessment)
+                    
+                    # Create filename
+                    assessment_name = assessment.get('name', 'assessment')
+                    filename = f"WAF_Assessment_{assessment_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.pdf"
+                    
+                    # Provide download button
+                    st.download_button(
+                        label="⬇️ Download PDF Report",
+                        data=pdf_bytes,
+                        file_name=filename,
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
+                    
+                    st.success("✅ PDF generated successfully!")
+                    
+            except ImportError:
+                st.error("❌ PDF generation requires 'reportlab' package. Install with: pip install reportlab")
+            except Exception as e:
+                st.error(f"❌ Error generating PDF: {str(e)}")
+                st.info("💡 Make sure reportlab is installed: pip install reportlab")
     
     with col3:
         if st.button("📊 Back to Dashboard", use_container_width=True):
