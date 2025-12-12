@@ -146,6 +146,19 @@ except Exception as e:
     MODULE_STATUS['AWS Connector'] = False
     MODULE_ERRORS['aws_connector'] = str(e)
 
+# Account Discovery Module - Auto-discover accounts from AWS Organizations
+try:
+    from account_discovery import (
+        AccountDiscovery,
+        render_account_discovery_ui,
+        render_auto_discovery_ui,
+        render_manual_entry_ui
+    )
+    MODULE_STATUS['Account Discovery'] = True
+except Exception as e:
+    MODULE_STATUS['Account Discovery'] = False
+    MODULE_ERRORS['account_discovery'] = str(e)
+
 try:
     from landscape_scanner import (
         render_landscape_scanner_tab,
@@ -618,6 +631,78 @@ def render_pdf_report_buttons(assessments=None, accounts_config=None, scan_type=
         """)
 
 # ============================================================================
+# ENHANCED AWS CONNECTOR WITH ACCOUNT DISCOVERY
+# ============================================================================
+
+def render_enhanced_aws_connector():
+    """
+    Enhanced AWS Connector with Account Discovery integration
+    Combines existing single account connector with multi-account discovery
+    """
+    st.markdown("### 🔌 AWS Account Connection")
+    
+    # Check if account discovery is available
+    if MODULE_STATUS.get('Account Discovery'):
+        # Create tabs for different connection modes
+        connector_tabs = st.tabs([
+            "🔗 Single Account Connection",
+            "🔍 Multi-Account Discovery"
+        ])
+        
+        with connector_tabs[0]:
+            # Original single account connector
+            if MODULE_STATUS.get('AWS Connector'):
+                render_aws_connector_tab()
+            else:
+                st.error("❌ AWS Connector module not loaded")
+                st.info("Ensure aws_connector.py is available")
+        
+        with connector_tabs[1]:
+            # New multi-account discovery
+            st.markdown("### 🔍 Discover Accounts from AWS Organizations")
+            
+            with st.expander("ℹ️ How Auto-Discovery Works", expanded=True):
+                st.markdown("""
+                **Eliminate manual account entry!**
+                
+                🌟 **Auto-Discovery Features:**
+                - Connect to your AWS Organizations Management account
+                - Automatically discovers ALL member accounts
+                - Extracts account IDs, names, emails, tags, OUs
+                - Auto-detects active regions per account
+                - Select accounts with checkboxes
+                
+                ⚡ **Time Savings:**
+                - Manual: 5 minutes per account
+                - Auto-Discovery: 30 seconds for unlimited accounts
+                
+                🎯 **Benefits:**
+                - 100% accurate (no typos)
+                - Always up-to-date
+                - Discovers new accounts automatically
+                - Rich metadata from Organizations
+                """)
+            
+            # Render the account discovery UI
+            render_account_discovery_ui()
+    else:
+        # Fallback to original single account connector
+        st.warning("""
+        ⚠️ Multi-Account Discovery not available
+        
+        To enable auto-discovery from AWS Organizations:
+        1. Copy `account_discovery.py` to your project
+        2. Restart the application
+        
+        Using single account connection only.
+        """)
+        
+        if MODULE_STATUS.get('AWS Connector'):
+            render_aws_connector_tab()
+        else:
+            st.error("❌ AWS Connector module not loaded")
+
+# ============================================================================
 # SIDEBAR - ENHANCED WITH USER PROFILE
 # ============================================================================
 
@@ -872,9 +957,9 @@ def main():
         with tabs[0]:
             render_executive_dashboard()
         
-        with tabs[1]:  # AWS Connector - NEW!
+        with tabs[1]:  # AWS Connector - ENHANCED with Auto-Discovery
             if MODULE_STATUS.get('AWS Connector'):
-                render_aws_connector_tab()
+                render_enhanced_aws_connector()
             else:
                 st.error("❌ AWS Connector Module Not Loaded")
                 st.info("""
@@ -988,9 +1073,9 @@ def main():
         with tabs[0]:
             render_executive_dashboard()
         
-        with tabs[1]:  # AWS Connector - NEW!
+        with tabs[1]:  # AWS Connector - ENHANCED with Auto-Discovery
             if MODULE_STATUS.get('AWS Connector'):
-                render_aws_connector_tab()
+                render_enhanced_aws_connector()
             else:
                 st.error("❌ AWS Connector Module Not Loaded")
                 st.info("""
@@ -1059,9 +1144,9 @@ def main():
             if not auth_disabled:
                 st.info("👁️ You have viewer access. Contact your administrator for additional permissions.")
         
-        with tabs[1]:  # AWS Connector - NEW!
+        with tabs[1]:  # AWS Connector - ENHANCED with Auto-Discovery
             if MODULE_STATUS.get('AWS Connector'):
-                render_aws_connector_tab()
+                render_enhanced_aws_connector()
             else:
                 st.error("❌ AWS Connector Module Not Loaded")
                 st.info("Contact your administrator to enable AWS Connector.")
