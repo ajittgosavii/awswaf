@@ -43,52 +43,57 @@ def generate_waf_pdf_report(assessment: Dict) -> bytes:
     # Define styles
     styles = getSampleStyleSheet()
     
-    # Custom styles
-    styles.add(ParagraphStyle(
-        name='CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#1f77b4'),
-        spaceAfter=30,
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    ))
+    # Custom styles - only add if they don't exist (fixes Streamlit rerun issue)
+    if 'CustomTitle' not in styles:
+        styles.add(ParagraphStyle(
+            name='CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            textColor=colors.HexColor('#1f77b4'),
+            spaceAfter=30,
+            alignment=TA_CENTER,
+            fontName='Helvetica-Bold'
+        ))
     
-    styles.add(ParagraphStyle(
-        name='SectionHeading',
-        parent=styles['Heading2'],
-        fontSize=16,
-        textColor=colors.HexColor('#2c3e50'),
-        spaceAfter=12,
-        spaceBefore=12,
-        fontName='Helvetica-Bold'
-    ))
+    if 'SectionHeading' not in styles:
+        styles.add(ParagraphStyle(
+            name='SectionHeading',
+            parent=styles['Heading2'],
+            fontSize=16,
+            textColor=colors.HexColor('#2c3e50'),
+            spaceAfter=12,
+            spaceBefore=12,
+            fontName='Helvetica-Bold'
+        ))
     
-    styles.add(ParagraphStyle(
-        name='SubHeading',
-        parent=styles['Heading3'],
-        fontSize=13,
-        textColor=colors.HexColor('#34495e'),
-        spaceAfter=8,
-        spaceBefore=8,
-        fontName='Helvetica-Bold'
-    ))
+    if 'SubHeading' not in styles:
+        styles.add(ParagraphStyle(
+            name='SubHeading',
+            parent=styles['Heading3'],
+            fontSize=13,
+            textColor=colors.HexColor('#34495e'),
+            spaceAfter=8,
+            spaceBefore=8,
+            fontName='Helvetica-Bold'
+        ))
     
-    styles.add(ParagraphStyle(
-        name='BodyText',
-        parent=styles['Normal'],
-        fontSize=10,
-        alignment=TA_JUSTIFY,
-        spaceAfter=6
-    ))
+    if 'BodyText' not in styles:
+        styles.add(ParagraphStyle(
+            name='BodyText',
+            parent=styles['Normal'],
+            fontSize=10,
+            alignment=TA_JUSTIFY,
+            spaceAfter=6
+        ))
     
-    styles.add(ParagraphStyle(
-        name='BulletPoint',
-        parent=styles['Normal'],
-        fontSize=10,
-        leftIndent=20,
-        spaceAfter=4
-    ))
+    if 'BulletPoint' not in styles:
+        styles.add(ParagraphStyle(
+            name='BulletPoint',
+            parent=styles['Normal'],
+            fontSize=10,
+            leftIndent=20,
+            spaceAfter=4
+        ))
     
     # =========================================================================
     # COVER PAGE
