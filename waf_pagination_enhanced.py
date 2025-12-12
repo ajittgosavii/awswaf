@@ -212,8 +212,21 @@ def render_questions_with_pagination(assessment: Dict, questions: List, pillar_f
             
             assessment['responses'][current_question.id] = response_data
             
-            # Update progress
-            assessment['progress'] = int((len(assessment['responses']) / total_questions) * 100)
+            # ======================================================================
+            # CALCULATE SCORES - FIX FOR 0 SCORE ISSUE
+            # ======================================================================
+            # Import scoring helper
+            try:
+                from assessment_scoring_helper import calculate_assessment_scores
+                calculate_assessment_scores(assessment, questions)
+            except Exception as e:
+                # Fallback: Manual calculation if helper not available
+                total_points = sum(r.get('points', 0) for r in assessment['responses'].values())
+                max_points = len(questions) * 100
+                assessment['overall_score'] = round((total_points / max_points * 100), 1) if max_points > 0 else 0
+                assessment['progress'] = round((len(assessment['responses']) / len(questions) * 100), 1)
+            
+            # Update progress (kept for backward compatibility)
             assessment['updated_at'] = datetime.now().isoformat()
             
             # Track AI assistance
