@@ -2038,13 +2038,22 @@ def render_dashboard_tab(assessment: Dict):
             """, unsafe_allow_html=True)
 
 def render_assessment_tab(assessment: Dict):
-    """Render assessment questions with AI assistance - KEY DIFFERENTIATOR"""
+    """Render assessment questions with AI assistance and PAGINATION - ENHANCED VERSION"""
+    
+    # Import the pagination module
+    try:
+        from waf_pagination_enhanced import render_questions_with_pagination
+        PAGINATION_AVAILABLE = True
+    except ImportError:
+        PAGINATION_AVAILABLE = False
+        st.warning("⚠️ Pagination module not found. Using legacy view.")
+    
     st.markdown("### 📝 Assessment Questions with AI Assistant")
     
     questions = get_complete_waf_questions()
     
-    # Header with AI tips button
-    col1, col2, col3 = st.columns([2, 1, 1])
+    # Header with pillar filter
+    col1, col2 = st.columns([3, 1])
     with col1:
         pillar_filter = st.selectbox(
             "Select Pillar",
@@ -2054,8 +2063,6 @@ def render_assessment_tab(assessment: Dict):
     with col2:
         if st.button("💡 AI Tips", help="Get AI-powered guidance"):
             st.session_state.show_ai_tips = not st.session_state.get('show_ai_tips', False)
-    with col3:
-        show_count = st.number_input("Show", min_value=5, max_value=50, value=10, step=5)
     
     # AI Tips panel
     if st.session_state.get('show_ai_tips', False):
@@ -2070,192 +2077,224 @@ def render_assessment_tab(assessment: Dict):
         *This AI assistance is NOT available in AWS's native WAF Tool!*
         """)
     
-    # Filter questions
+    # Filter questions by pillar
     filtered_questions = questions
     if pillar_filter != "All":
         filtered_questions = [q for q in questions if q.pillar.value == pillar_filter]
     
-    # Get auto-detected questions (must be defined before use)
+    # Get auto-detected questions
     auto_detected = assessment.get('auto_detected', {})
-    
-    # Calculate statistics
     auto_detected_count = sum(1 for q in filtered_questions if q.id in auto_detected)
     
-    info_msg = f"📋 Showing {len(filtered_questions)} questions"
+    # Show statistics
+    info_msg = f"📋 {len(filtered_questions)} questions in this pillar"
     if auto_detected_count > 0:
         info_msg += f" | ✅ {auto_detected_count} auto-detected ({auto_detected_count/len(filtered_questions)*100:.0f}%)"
     info_msg += " | 🤖 AI Assistant available"
-    
     st.info(info_msg)
     
-    # Render questions
-    for idx, question in enumerate(filtered_questions[:show_count]):
-        # Check if this question was auto-detected
-        is_auto_detected = question.id in auto_detected
-        detected_data = auto_detected.get(question.id, {})
+    # ============================================================================
+    # USE PAGINATION MODULE (if available) - NEW!
+    # ============================================================================
+    if PAGINATION_AVAILABLE:
+        # Use the enhanced pagination module
+        render_questions_with_pagination(assessment, filtered_questions, pillar_filter)
+    else:
+        # Fallback to original loop-based rendering (show limited questions)
+        st.warning("Using legacy view. Install pagination module for better experience.")
+        show_count = st.number_input("Show", min_value=5, max_value=50, value=10, step=5)
         
-        # Add indicator to expander title
-        expander_title = f"{question.pillar.icon} {question.id}: {question.text}"
-        if is_auto_detected:
-            expander_title = f"✅ {expander_title}"
-        
-        with st.expander(expander_title):
-            st.markdown(f"**Category:** {question.category}")
-            st.markdown(question.description)
+        # Original loop rendering (kept as fallback)
+        for idx, question in enumerate(filtered_questions[:show_count]):
+            is_auto_detected = question.id in auto_detected
+            detected_data = auto_detected.get(question.id, {})
             
-            # AUTO-DETECTION SECTION (NEW!)
+            expander_title = f"{question.pillar.icon} {question.id}: {question.text}"
             if is_auto_detected:
-                st.markdown("---")
-                st.markdown("### 🔍 Auto-Detected from AWS Scan")
-                
-                confidence = detected_data.get('confidence', 0)
-                confidence_color = "🟢" if confidence >= 85 else "🟡" if confidence >= 70 else "🟠"
-                
-                col_det1, col_det2 = st.columns([3, 1])
-                with col_det1:
-                    st.success(f"""
-                    **{confidence_color} Auto-Detected Answer**
-                    - Confidence: {confidence}%
-                    - Detected: {question.choices[detected_data.get('choice_index', 0)].text[:80]}...
-                    - Evidence: {len(detected_data.get('evidence', []))} findings
-                    """)
-                
-                with col_det2:
-                    override = st.checkbox("✏️ Override", key=f"override_{question.id}")
-                
-                # Show evidence
-                if detected_data.get('evidence'):
-                    with st.expander("📊 View Scan Evidence"):
-                        for ev in detected_data.get('evidence', []):
-                            st.caption(f"• {ev}")
-                
-                st.markdown("---")
+                expander_title = f"✅ {expander_title}"
             
-            # AI Assistant Button - PROMINENT PLACEMENT
-            col_ai, col_scan_info = st.columns([1, 3])
-            with col_ai:
-                if st.button(f"🤖 Get AI Help", key=f"ai_help_{question.id}", use_container_width=True, type="secondary"):
-                    with st.spinner("🤖 AI is analyzing this question for you..."):
-                        ai_assistance = get_ai_question_assistance(question, assessment)
-                        if ai_assistance:
-                            st.session_state[f"ai_assist_{question.id}"] = ai_assistance
-                            st.success("✅ AI analysis complete!")
-            
-            with col_scan_info:
-                if is_auto_detected and not override:
-                    st.info("💡 Using auto-detected answer. Check 'Override' to manually select.")
-                elif not is_auto_detected:
-                    st.caption("⚠️ Manual answer required (not auto-detectable)")
-            
-            # Show AI assistance if available
-            if f"ai_assist_{question.id}" in st.session_state:
-                ai_help = st.session_state[f"ai_assist_{question.id}"]
-                st.markdown("---")
+            with st.expander(expander_title):
+                st.markdown(f"**Category:** {question.category}")
+                st.markdown(question.description)
                 
-                st.markdown("### 🤖 AI Assistant Analysis")
-                st.caption("*Personalized guidance powered by Claude AI*")
+                # AUTO-DETECTION SECTION
+                if is_auto_detected:
+                    st.markdown("---")
+                    st.markdown("### 🔍 Auto-Detected from AWS Scan")
+                    
+                    confidence = detected_data.get('confidence', 0)
+                    confidence_color = "🟢" if confidence >= 85 else "🟡" if confidence >= 70 else "🟠"
+                    
+                    col_det1, col_det2 = st.columns([3, 1])
+                    with col_det1:
+                        st.success(f"""
+                        **{confidence_color} Auto-Detected Answer**
+                        - Confidence: {confidence}%
+                        - Detected: {question.choices[detected_data.get('choice_index', 0)].text[:80]}...
+                        - Evidence: {len(detected_data.get('evidence', []))} findings
+                        """)
+                    
+                    with col_det2:
+                        override = st.checkbox("✏️ Override", key=f"override_{question.id}")
+                    
+                    if detected_data.get('evidence'):
+                        with st.expander("📊 View Scan Evidence"):
+                            for ev in detected_data.get('evidence', []):
+                                st.caption(f"• {ev}")
+                    
+                    st.markdown("---")
+                else:
+                    override = False
                 
-                # Tabs for different AI insights
-                ai_tabs = st.tabs(["📖 Explanation", "💡 Why It Matters", "✅ Recommendation", "📚 Example", "🛠️ Steps"])
+                # AI Assistant Button
+                col_ai, col_scan_info = st.columns([1, 3])
+                with col_ai:
+                    if st.button(f"🤖 Get AI Help", key=f"ai_help_{question.id}", use_container_width=True, type="secondary"):
+                        with st.spinner("🤖 AI is analyzing this question for you..."):
+                            ai_assistance = get_ai_question_assistance(question, assessment)
+                            if ai_assistance:
+                                st.session_state[f"ai_assist_{question.id}"] = ai_assistance
+                                st.success("✅ AI analysis complete!")
                 
-                with ai_tabs[0]:
-                    st.markdown("**Simplified Explanation:**")
-                    st.info(ai_help.get('simplified_explanation', 'Processing...'))
+                with col_scan_info:
+                    if is_auto_detected and not override:
+                        st.info("💡 Using auto-detected answer. Check 'Override' to manually select.")
+                    elif not is_auto_detected:
+                        st.caption("⚠️ Manual answer required (not auto-detectable)")
                 
-                with ai_tabs[1]:
-                    st.markdown("**Business Impact:**")
-                    st.success(ai_help.get('why_matters', 'Processing...'))
-                
-                with ai_tabs[2]:
-                    st.markdown("**AI Recommendation:**")
-                    st.warning(ai_help.get('recommendation', 'Processing...'))
-                
-                with ai_tabs[3]:
-                    st.markdown("**Real-World Example:**")
-                    st.markdown(ai_help.get('example', 'Processing...'))
-                
-                with ai_tabs[4]:
-                    st.markdown("**Implementation Steps:**")
-                    st.markdown(ai_help.get('implementation_steps', 'Processing...'))
-                
-                st.markdown("---")
-            
-            st.markdown("**Select your answer:**")
-            
-            # Response selection
-            response_key = f"response_{question.id}"
-            current_response = assessment.get('responses', {}).get(question.id, {})
-            
-            # Determine default index
-            if is_auto_detected and not override:
-                # Use auto-detected answer
-                default_index = detected_data.get('choice_index', 0)
-            elif current_response:
-                # Use previously saved answer
-                default_index = current_response.get('choice_index', 0)
-            else:
-                # No default
-                default_index = 0
-            
-            selected_choice = st.radio(
-                "Choose one:",
-                range(len(question.choices)),
-                format_func=lambda i: f"{question.choices[i].risk_level.icon} {question.choices[i].text}",
-                key=response_key,
-                index=default_index,
-                disabled=(is_auto_detected and not override)  # Disable if auto-detected and not overriding
-            )
-            
-            # Show guidance for selected choice
-            if selected_choice is not None:
-                st.caption(f"💬 **Guidance:** {question.choices[selected_choice].guidance}")
-            
-            # Notes
-            notes_default = ""
-            if is_auto_detected and not override:
-                notes_default = "Auto-detected from AWS scan\n" + "\n".join([f"• {e}" for e in detected_data.get('evidence', [])])
-            elif current_response:
-                notes_default = current_response.get('notes', '')
-            
-            notes = st.text_area(
-                "Additional Notes & Evidence",
-                value=notes_default,
-                key=f"notes_{question.id}",
-                placeholder="Add context, evidence, or observations that support your answer...",
-                height=100
-            )
-            
-            if st.button("💾 Save Response", key=f"save_{question.id}", use_container_width=True, type="primary"):
-                if 'responses' not in assessment:
-                    assessment['responses'] = {}
-                
-                assessment['responses'][question.id] = {
-                    'choice_index': selected_choice,
-                    'choice_text': question.choices[selected_choice].text,
-                    'risk_level': question.choices[selected_choice].risk_level.label,
-                    'points': question.choices[selected_choice].points,
-                    'notes': notes,
-                    'timestamp': datetime.now().isoformat(),
-                    'ai_assisted': f"ai_assist_{question.id}" in st.session_state,  # Track AI usage
-                    'auto_detected': is_auto_detected,  # Track auto-detection
-                    'overridden': (is_auto_detected and override),  # Track if auto-detection was overridden
-                    'scan_confidence': detected_data.get('confidence', 0) if is_auto_detected else 0
-                }
-                
-                # Update progress
-                total_questions = len(questions)
-                assessment['progress'] = int((len(assessment['responses']) / total_questions) * 100)
-                assessment['updated_at'] = datetime.now().isoformat()
-                
-                # Track AI assistance usage
+                # Show AI assistance if available
                 if f"ai_assist_{question.id}" in st.session_state:
-                    if 'ai_assistance_used' not in assessment:
-                        assessment['ai_assistance_used'] = 0
-                    assessment['ai_assistance_used'] += 1
-                    del st.session_state[f"ai_assist_{question.id}"]
+                    ai_help = st.session_state[f"ai_assist_{question.id}"]
+                    st.markdown("---")
+                    
+                    st.markdown("### 🤖 AI Assistant Analysis")
+                    st.caption("*Personalized guidance powered by Claude AI*")
+                    
+                    ai_tabs = st.tabs(["📖 Explanation", "💡 Why It Matters", "✅ Recommendation", "📚 Example", "🛠️ Steps"])
+                    
+                    with ai_tabs[0]:
+                        st.markdown("**Simplified Explanation:**")
+                        st.info(ai_help.get('simplified_explanation', 'Processing...'))
+                    
+                    with ai_tabs[1]:
+                        st.markdown("**Business Impact:**")
+                        st.success(ai_help.get('why_matters', 'Processing...'))
+                    
+                    with ai_tabs[2]:
+                        st.markdown("**AI Recommendation:**")
+                        st.warning(ai_help.get('recommendation', 'Processing...'))
+                    
+                    with ai_tabs[3]:
+                        st.markdown("**Real-World Example:**")
+                        st.markdown(ai_help.get('example', 'Processing...'))
+                    
+                    with ai_tabs[4]:
+                        st.markdown("**Implementation Steps:**")
+                        st.markdown(ai_help.get('implementation_steps', 'Processing...'))
+                    
+                    st.markdown("---")
                 
-                st.success("✅ Response saved successfully!")
-                st.rerun()
+                st.markdown("**Select your answer:**")
+                
+                # Response selection
+                response_key = f"response_{question.id}"
+                current_response = assessment.get('responses', {}).get(question.id, {})
+                
+                # Determine default index
+                if is_auto_detected and not override:
+                    default_index = detected_data.get('choice_index', 0)
+                elif current_response:
+                    default_index = current_response.get('choice_index', 0)
+                else:
+                    default_index = 0
+                
+                selected_choice = st.radio(
+                    "Choose one:",
+                    range(len(question.choices)),
+                    format_func=lambda i: f"{question.choices[i].risk_level.icon} {question.choices[i].text}",
+                    key=response_key,
+                    index=default_index,
+                    disabled=(is_auto_detected and not override)
+                )
+                
+                # Show guidance for selected choice
+                if selected_choice is not None:
+                    st.caption(f"💬 **Guidance:** {question.choices[selected_choice].guidance}")
+                
+                # Notes
+                notes_default = ""
+                if is_auto_detected and not override:
+                    notes_default = "Auto-detected from AWS scan\n" + "\n".join([f"• {e}" for e in detected_data.get('evidence', [])])
+                elif current_response:
+                    notes_default = current_response.get('notes', '')
+                
+                notes = st.text_area(
+                    "Additional Notes & Evidence",
+                    value=notes_default,
+                    key=f"notes_{question.id}",
+                    placeholder="Add context, evidence, or observations that support your answer...",
+                    height=100
+                )
+                
+                # SAVE BUTTON - Now with Firebase integration
+                if st.button("💾 Save Response", key=f"save_{question.id}", use_container_width=True, type="primary"):
+                    # Import Firebase helper
+                    try:
+                        from firebase_database_helper import save_assessment_to_firebase, auto_sync_response
+                        FIREBASE_AVAILABLE = st.session_state.get('firebase_initialized', False)
+                    except:
+                        FIREBASE_AVAILABLE = False
+                    
+                    # Prepare response data
+                    response_data = {
+                        'choice_index': selected_choice,
+                        'choice_text': question.choices[selected_choice].text,
+                        'risk_level': question.choices[selected_choice].risk_level.label,
+                        'points': question.choices[selected_choice].points,
+                        'notes': notes,
+                        'timestamp': datetime.now().isoformat(),
+                        'ai_assisted': f"ai_assist_{question.id}" in st.session_state,
+                        'auto_detected': is_auto_detected,
+                        'overridden': (is_auto_detected and override),
+                        'scan_confidence': detected_data.get('confidence', 0) if is_auto_detected else 0
+                    }
+                    
+                    # Save to session state
+                    if 'responses' not in assessment:
+                        assessment['responses'] = {}
+                    assessment['responses'][question.id] = response_data
+                    
+                    # Update progress
+                    total_questions = len(questions)
+                    assessment['progress'] = int((len(assessment['responses']) / total_questions) * 100)
+                    assessment['updated_at'] = datetime.now().isoformat()
+                    
+                    # Track AI assistance usage
+                    if f"ai_assist_{question.id}" in st.session_state:
+                        if 'ai_assistance_used' not in assessment:
+                            assessment['ai_assistance_used'] = 0
+                        assessment['ai_assistance_used'] += 1
+                        del st.session_state[f"ai_assist_{question.id}"]
+                    
+                    # NEW: Save to Firebase if available
+                    if FIREBASE_AVAILABLE:
+                        assessment_id = assessment.get('assessment_id', 'default')
+                        sync_success = auto_sync_response(assessment_id, question.id, response_data)
+                        
+                        if not sync_success:
+                            success, message = save_assessment_to_firebase(assessment_id, assessment)
+                            if success:
+                                st.success("✅ Response saved to Firebase!")
+                            else:
+                                st.warning(f"⚠️ Saved locally but Firebase sync failed: {message}")
+                        else:
+                            st.success("✅ Response saved successfully!")
+                    else:
+                        st.success("✅ Response saved locally!")
+                        if not st.session_state.get('firebase_initialized', False):
+                            st.info("💡 Enable Firebase to persist data across sessions")
+                    
+                    st.rerun()
 
 def get_ai_question_assistance(question: Question, assessment: Dict) -> Optional[Dict]:
     """
