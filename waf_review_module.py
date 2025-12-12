@@ -2020,6 +2020,7 @@ def render_full_report(assessment: Dict):
     # Action Items
     st.markdown("## Recommended Actions")
     action_items = assessment.get('action_items', [])
+    progress = assessment.get('progress', 0)
     
     if action_items:
         st.info(f"📋 {len(action_items)} action items identified")
@@ -2028,19 +2029,40 @@ def render_full_report(assessment: Dict):
             st.caption(f"Priority: {action.get('priority', 'Medium')} | "
                       f"Effort: {action.get('estimated_effort', 'Unknown')}")
     else:
-        st.info("Complete the assessment to generate action items")
+        # FIX: Show different message based on completion
+        if progress >= 80:
+            st.success("✅ No action items needed - Your architecture follows all best practices!")
+        else:
+            st.info(f"Complete the assessment ({progress:.0f}% done) to generate action items")
     
     # Detailed responses by pillar
     st.markdown("## Detailed Responses")
     
+    # Get all questions to map responses to pillars
+    questions = get_complete_waf_questions()
+    question_map = {q.id: q for q in questions}
+    
     for pillar in Pillar:
         with st.expander(f"{pillar.icon} {pillar.value}"):
-            pillar_responses = {qid: r for qid, r in responses.items() if qid.startswith(pillar.value[:3].upper())}
+            # FIX: Filter responses by matching question pillar, not by ID prefix
+            pillar_responses = {}
+            for qid, resp in responses.items():
+                question = question_map.get(qid)
+                if question and question.pillar == pillar:
+                    pillar_responses[qid] = resp
             
             if pillar_responses:
-                st.info(f"Answered: {len(pillar_responses)} questions")
-                for qid, resp in list(pillar_responses.items())[:5]:
-                    st.markdown(f"**{qid}**: {resp.get('choice_text', 'N/A')[:100]}...")
+                st.info(f"Answered: {len(pillar_responses)} questions in this pillar")
+                # Show first 5 responses
+                for idx, (qid, resp) in enumerate(list(pillar_responses.items())[:5], 1):
+                    question = question_map.get(qid)
+                    question_text = question.text[:80] + "..." if question and len(question.text) > 80 else (question.text if question else qid)
+                    st.markdown(f"**{idx}. {question_text}**")
+                    st.caption(f"Answer: {resp.get('choice_text', 'N/A')[:100]}")
+                    st.caption(f"Risk: {resp.get('risk_level', 'Unknown')}")
+                
+                if len(pillar_responses) > 5:
+                    st.caption(f"... and {len(pillar_responses) - 5} more responses in this pillar")
             else:
                 st.caption("No responses yet for this pillar")
 
@@ -2621,15 +2643,87 @@ def render_action_items_tab(assessment: Dict):
     st.markdown("### 📋 Action Items")
     
     action_items = assessment.get('action_items', [])
+    progress = assessment.get('progress', 0)
+    overall_score = assessment.get('overall_score', 0)
     
     if not action_items:
-        st.info("✅ No action items yet. Complete the assessment to generate recommendations.")
+        # FIX: Show appropriate message based on completion
+        if progress >= 80:
+            st.success("✅ **No action items needed!**")
+            st.info(f"""
+            🎉 Excellent! Your architecture follows AWS Well-Architected best practices.
+            
+            **Assessment Status:**
+            - Progress: {progress:.0f}%
+            - Overall Score: {overall_score}/100
+            - All responses indicate low risk
+            
+            **What this means:**
+            - Your architecture is well-designed
+            - No critical or high-priority issues identified
+            - Continue monitoring and maintain current standards
+            
+            **Next Steps:**
+            - Schedule quarterly reassessments
+            - Review the AI Insights tab for optimization opportunities
+            - Consider advanced optimization strategies for cost and performance
+            """)
+        else:
+            st.info(f"✅ No action items yet. Complete the assessment ({progress:.0f}% done) to generate recommendations.")
         return
     
-    # Display action items
-    for item in action_items:
-        st.markdown(f"**{item.get('title', 'Action Item')}**")
-        st.caption(f"Priority: {item.get('priority', 'Medium')} | Effort: {item.get('effort', 'Unknown')}")
+    # Display action items grouped by priority
+    critical_items = [item for item in action_items if item.get('risk_level', '').upper() == 'CRITICAL']
+    high_items = [item for item in action_items if item.get('risk_level', '').upper() == 'HIGH']
+    medium_items = [item for item in action_items if item.get('risk_level', '').upper() == 'MEDIUM']
+    
+    # Summary
+    st.info(f"📋 **{len(action_items)} action items identified** | "
+            f"🔴 {len(critical_items)} Critical | "
+            f"🟠 {len(high_items)} High | "
+            f"🟡 {len(medium_items)} Medium")
+    
+    # Critical Priority
+    if critical_items:
+        st.markdown("### 🔴 Critical Priority")
+        for idx, item in enumerate(critical_items, 1):
+            with st.expander(f"{idx}. [{item.get('pillar', 'Unknown')}] {item.get('title', 'Action Item')}", expanded=True):
+                st.markdown(item.get('description', 'No description available'))
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.caption(f"**Priority:** {item.get('priority', 'Unknown')}")
+                with col2:
+                    st.caption(f"**Effort:** {item.get('effort', 'Unknown')}")
+                with col3:
+                    st.caption(f"**Cost:** {item.get('cost', 'Unknown')}")
+    
+    # High Priority
+    if high_items:
+        st.markdown("### 🟠 High Priority")
+        for idx, item in enumerate(high_items, 1):
+            with st.expander(f"{idx}. [{item.get('pillar', 'Unknown')}] {item.get('title', 'Action Item')}"):
+                st.markdown(item.get('description', 'No description available'))
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.caption(f"**Priority:** {item.get('priority', 'Unknown')}")
+                with col2:
+                    st.caption(f"**Effort:** {item.get('effort', 'Unknown')}")
+                with col3:
+                    st.caption(f"**Cost:** {item.get('cost', 'Unknown')}")
+    
+    # Medium Priority
+    if medium_items:
+        st.markdown("### 🟡 Medium Priority")
+        for idx, item in enumerate(medium_items, 1):
+            with st.expander(f"{idx}. [{item.get('pillar', 'Unknown')}] {item.get('title', 'Action Item')}"):
+                st.markdown(item.get('description', 'No description available'))
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.caption(f"**Priority:** {item.get('priority', 'Unknown')}")
+                with col2:
+                    st.caption(f"**Effort:** {item.get('effort', 'Unknown')}")
+                with col3:
+                    st.caption(f"**Cost:** {item.get('cost', 'Unknown')}")
 
 def render_reports_tab(assessment: Dict):
     """Render reports"""
