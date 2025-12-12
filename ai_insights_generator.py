@@ -26,16 +26,35 @@ def generate_comprehensive_insights(assessment: Dict, questions: List) -> Dict:
         Dictionary with insights organized by pillar
     """
     
-    # Check if Anthropic is available
+    # Check if Anthropic is available and get API key
     try:
         import anthropic
-        api_key = st.secrets.get("ANTHROPIC_API_KEY")
+        
+        # Try multiple locations for API key (support different formats)
+        api_key = None
+        
+        # Format 1: Root level ANTHROPIC_API_KEY
+        if "ANTHROPIC_API_KEY" in st.secrets:
+            api_key = st.secrets["ANTHROPIC_API_KEY"]
+        
+        # Format 2: Under [anthropic] section
+        elif "anthropic" in st.secrets:
+            if "ANTHROPIC_API_KEY" in st.secrets["anthropic"]:
+                api_key = st.secrets["anthropic"]["ANTHROPIC_API_KEY"]
+            elif "api_key" in st.secrets["anthropic"]:
+                api_key = st.secrets["anthropic"]["api_key"]
+        
+        # Format 3: Check environment variable as fallback
         if not api_key:
-            return {"error": "Anthropic API key not configured"}
+            import os
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+        
+        if not api_key:
+            return {"error": "Anthropic API key not configured. Add ANTHROPIC_API_KEY to Streamlit secrets."}
         
         client = anthropic.Anthropic(api_key=api_key)
-    except:
-        return {"error": "Anthropic API not available"}
+    except Exception as e:
+        return {"error": f"Anthropic API error: {str(e)}"}
     
     # Prepare assessment data for AI analysis
     analysis_data = prepare_assessment_data(assessment, questions)
