@@ -23,6 +23,9 @@ def render_questions_with_pagination(assessment: Dict, questions: List, pillar_f
     - Next/Previous navigation
     - Firebase auto-save
     - Progress tracking
+    
+    CRITICAL: 'questions' parameter must be the COMPLETE list of all 205 questions
+              for accurate scoring calculation
     """
     
     # Import Firebase helper
@@ -32,8 +35,11 @@ def render_questions_with_pagination(assessment: Dict, questions: List, pillar_f
     except:
         FIREBASE_AVAILABLE = False
     
-    # Filter questions by pillar if specified
-    if pillar_filter:
+    # IMPORTANT: Keep reference to ALL questions for scoring
+    all_questions = questions
+    
+    # Filter questions by pillar for DISPLAY only
+    if pillar_filter and pillar_filter != "All":
         filtered_questions = [q for q in questions if q.pillar.value == pillar_filter]
     else:
         filtered_questions = questions
@@ -214,19 +220,24 @@ def render_questions_with_pagination(assessment: Dict, questions: List, pillar_f
             
             # ======================================================================
             # CALCULATE SCORES - FIX FOR 0 SCORE ISSUE
+            # CRITICAL: Use ALL questions (all_questions), NOT filtered questions!
             # ======================================================================
             # Import scoring helper
             try:
                 from assessment_scoring_helper import calculate_assessment_scores
-                calculate_assessment_scores(assessment, questions)
+                # IMPORTANT: Pass all_questions (all 205), not filtered_questions!
+                calculate_assessment_scores(assessment, all_questions)
             except Exception as e:
                 # Fallback: Manual calculation if helper not available
+                # Use all_questions for correct calculation
                 total_points = sum(r.get('points', 0) for r in assessment['responses'].values())
-                max_points = len(questions) * 100
+                max_points = len(all_questions) * 100
                 assessment['overall_score'] = round((total_points / max_points * 100), 1) if max_points > 0 else 0
-                assessment['progress'] = round((len(assessment['responses']) / len(questions) * 100), 1)
+                assessment['progress'] = round((len(assessment['responses']) / len(all_questions) * 100), 1)
+                # Also show the error for debugging
+                st.error(f"Scoring calculation error: {str(e)}")
             
-            # Update progress (kept for backward compatibility)
+            # Update timestamp
             assessment['updated_at'] = datetime.now().isoformat()
             
             # Track AI assistance
