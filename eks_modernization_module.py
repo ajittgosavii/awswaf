@@ -1493,15 +1493,14 @@ This document describes the Amazon EKS architecture for {spec.project_name}.
 
 #### Storage Configuration
 - **EBS CSI Driver:** {'Enabled' if spec.ebs_csi_enabled else 'Disabled'}
-- **EBS:** {'Enabled' if spec.ebs_enabled else 'Disabled'}
 - **EFS:** {'Enabled' if spec.efs_enabled else 'Disabled'}
 - **FSx for Lustre:** {'Enabled' if spec.fsx_enabled else 'Disabled'}
 
 #### Security Configuration
-- **Encryption:** {'Enabled' if spec.enable_secrets_encryption else 'Disabled'}
-- **IRSA:** {'Enabled' if spec.enable_irsa else 'Disabled'}
-- **Pod Security:** {'Enabled' if spec.enable_pod_security else 'Disabled'}
-- **Network Policies:** {'Enabled' if spec.enable_network_policy else 'Disabled'}
+- **Encryption:** {'Enabled' if spec.encryption_enabled else 'Disabled'}
+- **IRSA:** {'Enabled' if spec.irsa_enabled else 'Disabled'}
+- **Pod Security:** {spec.pod_security_standards}
+- **Network Policies:** {'Enabled' if spec.network_policies else 'Disabled'}
 
 ### Node Groups
 
@@ -1522,8 +1521,8 @@ This document describes the Amazon EKS architecture for {spec.project_name}.
 Monthly estimated cost: See detailed breakdown in architecture review.
 
 ### Operational Considerations
-- **Logging:** {'Enabled' if spec.logging_enabled else 'Disabled'}
-- **Monitoring:** {spec.monitoring_solution}
+- **Logging:** {'Enabled' if spec.logging_enabled else 'Disabled'} ({spec.logging_destination if spec.logging_enabled else 'N/A'})
+- **Monitoring:** {'Prometheus' if spec.prometheus_enabled else 'CloudWatch'}
 - **Load Balancer:** {spec.load_balancer_type.upper() if spec.load_balancer_type else 'None'}
 
 ---
@@ -1634,7 +1633,7 @@ class DiagramGenerator:
   </text>
   <text x="{eks_x + eks_width/2}" y="{eks_y + 50}" text-anchor="middle" 
         font-family="Arial, sans-serif" font-size="12" fill="white">
-    Version: {spec.eks_version}
+    {spec.region}
   </text>
   <text x="{eks_x + eks_width/2}" y="{eks_y + 68}" text-anchor="middle" 
         font-family="Arial, sans-serif" font-size="11" fill="white">
@@ -1779,11 +1778,11 @@ class DiagramGenerator:
 ''')
         
         # Storage (if enabled)
-        if spec.ebs_enabled or spec.efs_enabled:
+        if spec.ebs_csi_enabled or spec.efs_enabled:
             storage_x, storage_y = 900, 400
             storage_items = []
             
-            if spec.ebs_enabled:
+            if spec.ebs_csi_enabled:
                 storage_items.append('💾 EBS Volumes')
             if spec.efs_enabled:
                 storage_items.append('📁 EFS File System')
