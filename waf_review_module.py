@@ -48,6 +48,19 @@ try:
 except ImportError:
     ANTHROPIC_AVAILABLE = False
 
+# Portfolio Integration - Multi-Account Support
+try:
+    from waf_portfolio_integration import (
+        render_assessment_type_selector,
+        render_portfolio_workflow,
+        is_portfolio_assessment,
+        handle_portfolio_scan,
+        export_portfolio_pdf
+    )
+    PORTFOLIO_AVAILABLE = True
+except ImportError:
+    PORTFOLIO_AVAILABLE = False
+
 # ============================================================================
 # AUTO-DETECTION ENGINE - Maps AWS Scan Results to WAF Questions
 # ============================================================================
@@ -1111,8 +1124,12 @@ def render_assessments_list():
                     col_a, col_b, col_c, col_d = st.columns([4, 1, 1, 1])
                     
                     with col_a:
+                        # ⭐ Show portfolio icon for multi-account assessments
+                        is_portfolio = assessment.get('is_portfolio', False)
+                        portfolio_icon = "🏢" if is_portfolio else ""
+                        
                         status_icon = "✅" if assessment.get('status') == 'completed' else "🔄"
-                        st.markdown(f"{status_icon} **{assessment.get('name', 'Unnamed Assessment')}**")
+                        st.markdown(f"{status_icon} {portfolio_icon} **{assessment.get('name', 'Unnamed Assessment')}**")
                         
                         # Show key metrics
                         progress = assessment.get('progress', 0)
@@ -1124,6 +1141,11 @@ def render_assessments_list():
                             metric_text += f" | Score: {score:.0f}/100"
                         if auto_detected > 0:
                             metric_text += f" | ✅ {auto_detected} auto-detected"
+                        
+                        # ⭐ Show account count for portfolios
+                        if is_portfolio:
+                            accounts = assessment.get('accounts', [])
+                            metric_text += f" | 🏢 {len(accounts)} accounts"
                         
                         st.caption(f"Created: {assessment.get('created_at', 'Unknown')[:10]} | {metric_text}")
                     
@@ -1155,6 +1177,18 @@ def render_assessments_list():
     with col2:
         st.markdown("### ➕ Create New Assessment")
         
+        # ⭐ PORTFOLIO INTEGRATION: Assessment Type Selector
+        if PORTFOLIO_AVAILABLE:
+            st.markdown("---")
+            assessment_mode = render_assessment_type_selector()
+            st.markdown("---")
+            
+            if assessment_mode == "Multi-Account Portfolio":
+                # Show portfolio workflow
+                render_portfolio_workflow()
+                return  # Exit early - portfolio workflow handles everything
+        
+        # Otherwise, show standard single-account form
         with st.form("main_new_assessment_form"):
             st.caption("Create a comprehensive WAF assessment with AI assistance and automated scanning")
             
@@ -1238,7 +1272,8 @@ def render_assessments_list():
                         'enable_scanning': enable_scanning,
                         'enable_ai': enable_ai,
                         'scan_results': None,
-                        'auto_detected': {}
+                        'auto_detected': {},
+                        'is_portfolio': False  # ⭐ Explicit flag for single-account
                     }
                     
                     # Save to session state
