@@ -58,8 +58,20 @@ class AccountDiscovery:
                 role_arn = self.management_creds['role_arn']
                 session_name = f"WAFAdvisor-Discovery-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 
-                # Create STS client
-                sts = boto3.client('sts')
+                # Try to get credentials from Streamlit secrets first
+                sts_kwargs = {}
+                try:
+                    if hasattr(st, 'secrets') and 'aws' in st.secrets:
+                        sts_kwargs['aws_access_key_id'] = st.secrets['aws']['access_key_id']
+                        sts_kwargs['aws_secret_access_key'] = st.secrets['aws']['secret_access_key']
+                        if 'default_region' in st.secrets['aws']:
+                            sts_kwargs['region_name'] = st.secrets['aws']['default_region']
+                        logger.info("Using credentials from Streamlit secrets")
+                except Exception as e:
+                    logger.info(f"Streamlit secrets not available, using default credentials: {e}")
+                
+                # Create STS client (with secrets if available, otherwise default)
+                sts = boto3.client('sts', **sts_kwargs)
                 
                 # Assume role
                 response = sts.assume_role(
@@ -98,8 +110,20 @@ class AccountDiscovery:
         """Get STS client for role assumption"""
         if self.sts_client:
             return self.sts_client
+        
+        # Try to get credentials from Streamlit secrets first
+        sts_kwargs = {}
+        try:
+            if hasattr(st, 'secrets') and 'aws' in st.secrets:
+                sts_kwargs['aws_access_key_id'] = st.secrets['aws']['access_key_id']
+                sts_kwargs['aws_secret_access_key'] = st.secrets['aws']['secret_access_key']
+                if 'default_region' in st.secrets['aws']:
+                    sts_kwargs['region_name'] = st.secrets['aws']['default_region']
+                logger.info("Using credentials from Streamlit secrets for STS")
+        except Exception as e:
+            logger.info(f"Streamlit secrets not available, using default credentials: {e}")
             
-        self.sts_client = boto3.client('sts')
+        self.sts_client = boto3.client('sts', **sts_kwargs)
         return self.sts_client
     
     def discover_from_organizations(
